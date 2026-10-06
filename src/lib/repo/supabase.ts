@@ -1,0 +1,335 @@
+import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { DEFAULT_SERVICES } from "@/lib/default-services";
+import type { ServiceInput } from "@/lib/schemas";
+import { createAdminClient } from "@/lib/supabase/clients";
+import type {
+  AiGeneration,
+  AiReview,
+  AppSettings,
+  Conversation,
+  ConversationFull,
+  ConversationSettings,
+  ConversationState,
+  GenerationStatus,
+  Message,
+  Service,
+} from "@/lib/types";
+import { defaultAppSettings } from "./memory";
+import type { NewMessage, Repository, UpsertConversationInput } from "./types";
+
+interface PgError {
+  message: string;
+  code?: string;
+}
+
+function must<T>(res: { data: T | null; error: PgError | null }, what: string): T {
+  if (res.error) throw new Error(`${what}: ${res.error.message}`);
+  if (res.data === null) throw new Error(`${what}: no data`);
+  return res.data;
+}
+
+function one<T>(v: T | T[] | null | undefined): T {
+  const row = Array.isArray(v) ? v[0] : v;
+  if (!row) throw new Error("Missing related row");
+  return row;
+}
+
+type ConversationRow = Conversation & {
+  conversation_settings: ConversationSettings | ConversationSettings[] | null;
+  conversation_state: ConversationState | ConversationState[] | null;
+  conversation_services: { service_id: string }[] | null;
+};
+
+const CONVERSATION_SELECT =
+  "*, conversation_settings(*), conversation_state(*), conversation_services(service_id)";
+
+function toFull(row: ConversationRow): ConversationFull {
+  const { conversation_settings, conversation_state, conversation_services, ...conv } = row;
+  return {
+    ...conv,
+    settings: one(conversation_settings),
+    state: one(conversation_state),
+    service_ids: (conversation_services ?? []).map((x) => x.service_id),
+  };
+}
+
+function reviewRow(r: AiReview): AiReview {
+  return { ...r, confidence: Number(r.confidence) };
+}
+
+const initialized = new Set<string>();
+
+export class SupabaseRepository implements Repository {
+  private db: SupabaseClient = createAdminClient();
+
+  /** First touch for an owner: create settings + seed default services. */
+  private async init(ownerId: string) {
+    if (initialized.has(ownerId)) return;
+    const { data, error } = await this.db.from("app_settings").select("owner_id").eq("owner_id", ownerId).maybeSingle();
+    if (error) throw new Error(`init: ${error.message}`);
+    if (!data) {
+      const { owner_id: _o, updated_at: _u, ...defaults } = defaultAppSettings(ownerId);
+      must(await this.db.from("app_settings").insert({ owner_id: ownerId, ...defaults }).select().single(), "init settings");
+      const { count } = await this.db.from("services").select("id", { count: "exact", head: true }).eq("owner_id", ownerId);
+      if (!count) {
+        must(
+          await this.db
+            .from("services")
+            .insert(DEFAULT_SERVICES.map((s, i) => ({ ...s, owner_id: ownerId, sort_order: i, is_active: true })))
+            .select(),
+          "seed services",
+        );
+      }
+    }
+    initialized.add(ownerId);
+  }
+
+  async listConversations(ownerId: string) {
+    await this.init(ownerId);
+    const res = await this.db
+      .from("conversations")
+      .select(CONVERSATION_SELECT)
+      .eq("owner_id", ownerId)
+      .order("last_message_at", { ascending: false, nullsFirst: false })
+      .limit(500);
+    return must(res, "listConversations").map((r) => toFull(r as ConversationRow));
+  }
+
+  async getConversation(ownerId: string, id: string) {
+    const res = await this.db.from("conversations").select(CONVERSATION_SELECT).eq("owner_id", ownerId).eq("id", id).maybeSingle();
+    if (res.error) throw new Error(`getConversation: ${res.error.message}`);
+    return res.data ? toFull(res.data as ConversationRow) : null;
+  }
+
+  async upsertConversationByThread(ownerId: string, input: UpsertConversationInput) {
+    await this.init(ownerId);
+    const found = await this.db
+      .from("conversations")
+      .select("id")
+      .eq("owner_id", ownerId)
+      .eq("external_thread_id", input.external_thread_id)
+      .maybeSingle();
+    if (found.error) throw new Error(`upsertConversation: ${found.error.message}`);
+    let id = found.data?.id as string | undefined;
+    if (!id) {
+      const ins = await this.db
+        .from("conversations")
+        .upsert({ owner_id: ownerId, ...input }, { onConflict: "owner_id,external_thread_id", ignoreDuplicates: false })
+        .select("id")
+        .single();
+      id = must(ins, "insert conversation").id as string;
+      const app = await this.getAppSettings(ownerId);
+      must(
+        await this.db
+          .from("conversation_settings")
+          .upsert(
+            { conversation_id: id, owner_id: ownerId, tone: app.default_tone, custom_tone: app.default_custom_tone },
+            { onConflict: "conversation_id", ignoreDuplicates: true },
+          )
+          .select(),
+        "insert settings",
+      );
+      must(
+        await this.db
+          .from("conversation_state")
+          .upsert({ conversation_id: id, owner_id: ownerId }, { onConflict: "conversation_id", ignoreDuplicates: true })
+          .select(),
+        "insert state",
+      );
+    }
+    const conv = await this.getConversation(ownerId, id);
+    if (!conv) throw new Error("Conversation vanished after upsert");
+    return conv;
+  }
+
+  async updateSettings(ownerId: string, conversationId: string, patch: Partial<Omit<ConversationSettings, "conversation_id">>) {
+    const res = await this.db
+      .from("conversation_settings")
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq("owner_id", ownerId)
+      .eq("conversation_id", conversationId)
+      .select("conversation_id");
+    if (must(res, "updateSettings").length === 0) throw new Error("Conversation not found");
+  }
+
+  async updateState(ownerId: string, conversationId: string, patch: Partial<Omit<ConversationState, "conversation_id">>) {
+    const res = await this.db
+      .from("conversation_state")
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq("owner_id", ownerId)
+      .eq("conversation_id", conversationId)
+      .select("conversation_id");
+    if (must(res, "updateState").length === 0) throw new Error("Conversation not found");
+  }
+
+  async setConversationServices(ownerId: string, conversationId: string, serviceIds: string[]) {
+    const own = must(await this.db.from("conversations").select("id").eq("owner_id", ownerId).eq("id", conversationId), "ownership");
+    if (own.length === 0) throw new Error("Conversation not found");
+    const valid = must(await this.db.from("services").select("id").eq("owner_id", ownerId).in("id", serviceIds.length ? serviceIds : ["00000000-0000-0000-0000-000000000000"]), "validate services");
+    const ids = valid.map((v) => v.id as string);
+    must(await this.db.from("conversation_services").delete().eq("owner_id", ownerId).eq("conversation_id", conversationId).select(), "clear services");
+    if (ids.length) {
+      must(
+        await this.db.from("conversation_services").insert(ids.map((service_id) => ({ conversation_id: conversationId, service_id, owner_id: ownerId }))).select(),
+        "set services",
+      );
+    }
+  }
+
+  async acquireLock(ownerId: string, conversationId: string, ttlMs: number) {
+    const nowIso = new Date().toISOString();
+    const res = await this.db
+      .from("conversation_state")
+      .update({ lock_until: new Date(Date.now() + ttlMs).toISOString() })
+      .eq("owner_id", ownerId)
+      .eq("conversation_id", conversationId)
+      .or(`lock_until.is.null,lock_until.lt.${nowIso}`)
+      .select("conversation_id");
+    return must(res, "acquireLock").length > 0;
+  }
+
+  async releaseLock(ownerId: string, conversationId: string) {
+    await this.db.from("conversation_state").update({ lock_until: null }).eq("owner_id", ownerId).eq("conversation_id", conversationId);
+  }
+
+  async addMessage(ownerId: string, msg: NewMessage) {
+    const row = {
+      owner_id: ownerId,
+      conversation_id: msg.conversation_id,
+      external_message_id: msg.external_message_id,
+      sender_type: msg.sender_type,
+      sender_name: msg.sender_name,
+      content: msg.content,
+      created_at: msg.created_at ?? new Date().toISOString(),
+      metadata: msg.metadata ?? {},
+    };
+    const ins = await this.db.from("messages").insert(row).select().single();
+    if (ins.error) {
+      if (ins.error.code === "23505" && msg.external_message_id) {
+        const existing = must(
+          await this.db.from("messages").select().eq("owner_id", ownerId).eq("external_message_id", msg.external_message_id).single(),
+          "load duplicate",
+        );
+        return { message: existing as unknown as Message, created: false };
+      }
+      throw new Error(`addMessage: ${ins.error.message}`);
+    }
+    const message = must(ins, "addMessage") as unknown as Message;
+    await this.db
+      .from("conversations")
+      .update({
+        last_message_at: message.created_at,
+        last_message_preview: message.content.slice(0, 200),
+        last_message_sender: message.sender_type,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("owner_id", ownerId)
+      .eq("id", msg.conversation_id);
+    return { message, created: true };
+  }
+
+  async listRecentMessages(ownerId: string, conversationId: string, limit: number) {
+    const res = await this.db
+      .from("messages")
+      .select()
+      .eq("owner_id", ownerId)
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    return (must(res, "listRecentMessages") as Message[]).reverse();
+  }
+
+  async listServices(ownerId: string) {
+    await this.init(ownerId);
+    const res = await this.db.from("services").select().eq("owner_id", ownerId).order("sort_order");
+    return must(res, "listServices") as Service[];
+  }
+
+  async saveService(ownerId: string, input: ServiceInput) {
+    const { id, ...fields } = input;
+    if (id) {
+      const res = await this.db
+        .from("services")
+        .update({ ...fields, updated_at: new Date().toISOString() })
+        .eq("owner_id", ownerId)
+        .eq("id", id)
+        .select()
+        .single();
+      return must(res, "saveService") as Service;
+    }
+    const count = (await this.listServices(ownerId)).length;
+    const res = await this.db.from("services").insert({ ...fields, owner_id: ownerId, sort_order: count }).select().single();
+    return must(res, "createService") as Service;
+  }
+
+  async deleteService(ownerId: string, id: string) {
+    must(await this.db.from("services").delete().eq("owner_id", ownerId).eq("id", id).select(), "deleteService");
+  }
+
+  async createGeneration(ownerId: string, gen: Pick<AiGeneration, "conversation_id" | "generated_text" | "model" | "prompt_version" | "status" | "error" | "state_update">) {
+    const res = await this.db.from("ai_generations").insert({ owner_id: ownerId, ...gen }).select().single();
+    return must(res, "createGeneration") as AiGeneration;
+  }
+
+  async updateGeneration(ownerId: string, id: string, patch: Partial<Pick<AiGeneration, "status" | "error" | "generated_text">>) {
+    must(await this.db.from("ai_generations").update(patch).eq("owner_id", ownerId).eq("id", id).select(), "updateGeneration");
+  }
+
+  async getGeneration(ownerId: string, id: string) {
+    const res = await this.db.from("ai_generations").select().eq("owner_id", ownerId).eq("id", id).maybeSingle();
+    if (res.error) throw new Error(`getGeneration: ${res.error.message}`);
+    return (res.data as AiGeneration | null) ?? null;
+  }
+
+  async addReview(ownerId: string, review: Omit<AiReview, "id" | "created_at" | "owner_id">) {
+    const res = await this.db.from("ai_reviews").insert({ owner_id: ownerId, ...review }).select().single();
+    return reviewRow(must(res, "addReview") as AiReview);
+  }
+
+  async listReviews(ownerId: string, generationId: string) {
+    const res = await this.db.from("ai_reviews").select().eq("owner_id", ownerId).eq("generation_id", generationId).order("created_at");
+    return (must(res, "listReviews") as AiReview[]).map(reviewRow);
+  }
+
+  async listGenerationsByStatus(ownerId: string, status: GenerationStatus) {
+    const res = await this.db
+      .from("ai_generations")
+      .select()
+      .eq("owner_id", ownerId)
+      .eq("status", status)
+      .order("created_at", { ascending: false })
+      .limit(200);
+    return must(res, "listGenerationsByStatus") as AiGeneration[];
+  }
+
+  async listGenerationsForConversation(ownerId: string, conversationId: string, limit: number) {
+    const res = await this.db
+      .from("ai_generations")
+      .select()
+      .eq("owner_id", ownerId)
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    return must(res, "listGenerationsForConversation") as AiGeneration[];
+  }
+
+  async getAppSettings(ownerId: string) {
+    await this.init(ownerId);
+    const res = await this.db.from("app_settings").select().eq("owner_id", ownerId).single();
+    const row = must(res, "getAppSettings") as AppSettings;
+    return { ...row, checker_min_confidence: Number(row.checker_min_confidence) };
+  }
+
+  async saveAppSettings(ownerId: string, patch: Partial<Omit<AppSettings, "owner_id">>) {
+    await this.init(ownerId);
+    const res = await this.db
+      .from("app_settings")
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq("owner_id", ownerId)
+      .select()
+      .single();
+    const row = must(res, "saveAppSettings") as AppSettings;
+    return { ...row, checker_min_confidence: Number(row.checker_min_confidence) };
+  }
+}
