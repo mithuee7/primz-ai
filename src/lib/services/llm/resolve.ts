@@ -1,6 +1,6 @@
 import "server-only";
-import { decryptSecret } from "@/lib/crypto";
 import { getEnv, isDemoMode } from "@/lib/env";
+import { tryDecrypt } from "@/lib/secrets";
 import type { AppSettings } from "@/lib/types";
 import { DemoLLM } from "./demo";
 import { GroqClient } from "./groq";
@@ -13,14 +13,9 @@ import { LLMError, type LLMClient } from "./types";
  *  3. Otherwise: not configured -> the pipeline fails closed (nothing sent)
  */
 export function resolveGroqKey(settings: AppSettings): { key: string | null; source: "settings" | "env" | "none" } {
+  const saved = tryDecrypt(settings.groq_key_encrypted); // null if missing or unreadable (service key rotated)
+  if (saved) return { key: saved, source: "settings" };
   const env = getEnv();
-  if (settings.groq_key_encrypted && env.APP_ENCRYPTION_KEY) {
-    try {
-      return { key: decryptSecret(settings.groq_key_encrypted, env.APP_ENCRYPTION_KEY), source: "settings" };
-    } catch {
-      // Unreadable (key rotated?), fall through to env
-    }
-  }
   if (env.GROQ_API_KEY) return { key: env.GROQ_API_KEY, source: "env" };
   return { key: null, source: "none" };
 }
@@ -38,5 +33,5 @@ export function resolveLLM(settings: AppSettings): LLMClient {
   const { key } = resolveGroqKey(settings);
   if (key) return new GroqClient(key);
   if (isDemoMode()) return new DemoLLM();
-  throw new LLMError("Groq is not configured. Add a key in Settings or set GROQ_API_KEY.", "not_configured", false);
+  throw new LLMError("Groq is not configured. Add your Groq key in Settings.", "not_configured", false);
 }

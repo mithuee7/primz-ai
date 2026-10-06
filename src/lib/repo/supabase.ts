@@ -13,8 +13,11 @@ import type {
   ConversationState,
   GenerationStatus,
   Message,
+  ReplyClaim,
+  ReplyClaimStatus,
   Service,
 } from "@/lib/types";
+import { APP_SETTINGS_META_DEFAULTS } from "@/lib/types";
 import { defaultAppSettings } from "./memory";
 import type { NewMessage, Repository, UpsertConversationInput } from "./types";
 
@@ -58,6 +61,11 @@ function reviewRow(r: AiReview): AiReview {
   return { ...r, confidence: Number(r.confidence) };
 }
 
+/** Numeric columns come back as strings; meta_* columns are missing until migration 0002 is run. */
+function normalizeSettings(row: AppSettings): AppSettings {
+  return { ...APP_SETTINGS_META_DEFAULTS, ...row, checker_min_confidence: Number(row.checker_min_confidence) };
+}
+
 const initialized = new Set<string>();
 const initializing = new Map<string, Promise<void>>();
 
@@ -81,7 +89,9 @@ export class SupabaseRepository implements Repository {
   }
 
   private async runInit(ownerId: string) {
-    const { owner_id: _o, updated_at: _u, ...defaults } = defaultAppSettings(ownerId);
+    // Only the original columns are inserted, so first login still works if 0002 hasn't been run yet.
+    const { owner_id: _o, updated_at: _u, ...all } = defaultAppSettings(ownerId);
+    const defaults = Object.fromEntries(Object.entries(all).filter(([k]) => !k.startsWith("meta_")));
     // ON CONFLICT DO NOTHING: safe across concurrent requests and multiple server instances.
     // Only the request that actually inserted the row gets it back, and only that one seeds services.
     const res = await this.db
@@ -258,6 +268,53 @@ export class SupabaseRepository implements Repository {
     return (must(res, "listRecentMessages") as Message[]).reverse();
   }
 
+  async updateMessage(ownerId: string, messageId: string, patch: { sender_type?: Message["sender_type"]; sender_name?: string | null; metadata?: Record<string, unknown> }) {
+    const { metadata, ...cols } = patch;
+    const update: Record<string, unknown> = { ...cols };
+    if (metadata) {
+      const cur = must(await this.db.from("messages").select("metadata").eq("owner_id", ownerId).eq("id", messageId).single(), "load message");
+      update.metadata = { ...((cur as unknown as { metadata?: Record<string, unknown> }).metadata ?? {}), ...metadata };
+    }
+    must(await this.db.from("messages").update(update).eq("owner_id", ownerId).eq("id", messageId).select("id"), "updateMessage");
+  }
+
+  /** The primary key (trigger_message_id) makes the claim atomic across requests and server instances. */
+  async claimReply(ownerId: string, conversationId: string, triggerMessageId: string, reclaimable: ReplyClaimStatus[]) {
+    const ins = await this.db
+      .from("reply_claims")
+      .insert({ owner_id: ownerId, conversation_id: conversationId, trigger_message_id: triggerMessageId, status: "PROCESSING" })
+      .select("trigger_message_id");
+    if (!ins.error) return { claimed: true as const };
+    if (ins.error.code !== "23505") throw new Error(`claimReply: ${ins.error.message}`);
+
+    if (reclaimable.length > 0) {
+      // Conditional update: only one concurrent caller can flip a claim out of a reclaimable status.
+      const upd = await this.db
+        .from("reply_claims")
+        .update({ status: "PROCESSING", updated_at: new Date().toISOString() })
+        .eq("owner_id", ownerId)
+        .eq("trigger_message_id", triggerMessageId)
+        .in("status", reclaimable)
+        .select("trigger_message_id");
+      if (upd.error) throw new Error(`claimReply: ${upd.error.message}`);
+      if (upd.data && upd.data.length > 0) return { claimed: true as const };
+    }
+    const ex = await this.db.from("reply_claims").select().eq("owner_id", ownerId).eq("trigger_message_id", triggerMessageId).maybeSingle();
+    return { claimed: false as const, existing: (ex.data as ReplyClaim | null) ?? null };
+  }
+
+  async setClaimStatus(ownerId: string, triggerMessageId: string, status: ReplyClaimStatus, generationId?: string | null) {
+    const patch: Record<string, unknown> = { status, updated_at: new Date().toISOString() };
+    if (generationId !== undefined) patch.generation_id = generationId;
+    must(await this.db.from("reply_claims").update(patch).eq("owner_id", ownerId).eq("trigger_message_id", triggerMessageId).select("trigger_message_id"), "setClaimStatus");
+  }
+
+  async listStaleClaims(ownerId: string, olderThanMs: number) {
+    const cutoff = new Date(Date.now() - olderThanMs).toISOString();
+    const res = await this.db.from("reply_claims").select().eq("owner_id", ownerId).eq("status", "PROCESSING").lte("updated_at", cutoff).limit(50);
+    return must(res, "listStaleClaims") as ReplyClaim[];
+  }
+
   async listServices(ownerId: string) {
     await this.init(ownerId);
     const res = await this.db.from("services").select().eq("owner_id", ownerId).order("sort_order");
@@ -335,8 +392,39 @@ export class SupabaseRepository implements Repository {
   async getAppSettings(ownerId: string) {
     await this.init(ownerId);
     const res = await this.db.from("app_settings").select().eq("owner_id", ownerId).single();
-    const row = must(res, "getAppSettings") as AppSettings;
-    return { ...row, checker_min_confidence: Number(row.checker_min_confidence) };
+    return normalizeSettings(must(res, "getAppSettings") as AppSettings);
+  }
+
+  async updateConversationProfile(ownerId: string, conversationId: string, patch: { lead_name?: string; lead_username?: string; lead_avatar_url?: string | null }) {
+    must(
+      await this.db
+        .from("conversations")
+        .update({ ...patch, updated_at: new Date().toISOString() })
+        .eq("owner_id", ownerId)
+        .eq("id", conversationId)
+        .select("id"),
+      "updateConversationProfile",
+    );
+  }
+
+  async findOwnerByMeta(query: { igIds?: string[]; verifyToken?: string }) {
+    let q = this.db.from("app_settings").select("owner_id").limit(1);
+    if (query.verifyToken) {
+      q = q.eq("meta_verify_token", query.verifyToken);
+    } else if (query.igIds?.length) {
+      // Ids come from an unauthenticated payload and go into a filter string: digits only.
+      const ids = query.igIds.filter((id) => /^\d{5,25}$/.test(id));
+      if (ids.length === 0) return null;
+      q = q.or(ids.map((id) => `meta_ig_account_id.eq.${id},meta_ig_scoped_id.eq.${id}`).join(","));
+    } else {
+      return null;
+    }
+    const res = await q.maybeSingle();
+    if (res.error) {
+      console.error("[findOwnerByMeta]", res.error.message);
+      return null;
+    }
+    return (res.data?.owner_id as string | undefined) ?? null;
   }
 
   async saveAppSettings(ownerId: string, patch: Partial<Omit<AppSettings, "owner_id">>) {
@@ -347,7 +435,6 @@ export class SupabaseRepository implements Repository {
       .eq("owner_id", ownerId)
       .select()
       .single();
-    const row = must(res, "saveAppSettings") as AppSettings;
-    return { ...row, checker_min_confidence: Number(row.checker_min_confidence) };
+    return normalizeSettings(must(res, "saveAppSettings") as AppSettings);
   }
 }

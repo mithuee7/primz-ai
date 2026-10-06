@@ -4,9 +4,8 @@ import { Loader2, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { deleteServiceAction, saveServiceAction } from "@/app/actions";
-import { Badge, Button, Card, EmptyState } from "@/components/ui/primitives";
+import { Button, Card, EmptyState } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
-import { Switch } from "@/components/ui/switch";
 import type { Service } from "@/lib/types";
 
 type Draft = Pick<Service, "name" | "description" | "ideal_customer" | "problems_solved" | "key_benefits" | "pitch_guidance" | "is_active"> & { id?: string };
@@ -54,15 +53,6 @@ export function ServicesManager({ services }: { services: Service[] }) {
                 <button onClick={() => { setError(null); setDraft({ ...s }); }} className="min-w-0 text-left">
                   <h3 className="text-sm font-semibold hover:underline">{s.name}</h3>
                 </button>
-                <div className="flex items-center gap-2">
-                  <Badge tone={s.is_active ? "green" : "neutral"}>{s.is_active ? "Active" : "Inactive"}</Badge>
-                  <Switch
-                    checked={s.is_active}
-                    disabled={pending}
-                    label={`${s.name} active`}
-                    onChange={(v) => run(() => saveServiceAction({ ...s, is_active: v }))}
-                  />
-                </div>
               </div>
               <p className="mt-2 text-sm text-zinc-600">{s.description}</p>
               <dl className="mt-3 space-y-1.5 text-xs text-zinc-500">
@@ -102,10 +92,7 @@ export function ServicesManager({ services }: { services: Service[] }) {
                 {f.hint ? <p className="mt-1 text-xs text-zinc-500">{f.hint}</p> : null}
               </div>
             ))}
-            <label className="flex items-center gap-2.5 text-sm">
-              <Switch checked={draft.is_active} onChange={(v) => setDraft({ ...draft, is_active: v })} label="Active" />
-              Active (available to the AI)
-            </label>
+            <p className="text-xs text-zinc-500">Turn this service on or off for each chat in that chat’s settings. Nothing here is global.</p>
             {error ? <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
             <div className="flex items-center justify-between gap-2 pt-2">
               <Button type="submit" disabled={pending || !draft.name.trim()}>

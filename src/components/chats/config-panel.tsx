@@ -20,7 +20,7 @@ export function ConfigPanel({ conv, services, onSaved }: { conv: ConversationFul
   const [saved, setSaved] = useState(false);
   const [pending, start] = useTransition();
 
-  const active = services.filter((s) => s.is_active);
+  const active = services;
   const noneSelected = !allServices && selected.size === 0;
 
   const toggleService = (id: string) => {
@@ -71,7 +71,7 @@ export function ConfigPanel({ conv, services, onSaved }: { conv: ConversationFul
         </label>
         <div className={cn("mt-2 space-y-1.5", allServices && "pointer-events-none opacity-40")} aria-disabled={allServices}>
           {active.length === 0 ? (
-            <p className="text-sm text-zinc-500">No active services. Add some on the Services page.</p>
+            <p className="text-sm text-zinc-500">No services yet. Add some on the Services page.</p>
           ) : (
             active.map((s) => (
               <label key={s.id} className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50">

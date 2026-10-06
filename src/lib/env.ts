@@ -28,11 +28,6 @@ const schema = z.object({
     (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
     z.coerce.number().min(0).max(1).default(0.85),
   ),
-  META_APP_SECRET: optionalString,
-  META_VERIFY_TOKEN: optionalString,
-  META_PAGE_ACCESS_TOKEN: optionalString,
-  META_IG_BUSINESS_ACCOUNT_ID: optionalString,
-  OWNER_USER_ID: optionalString,
 });
 
 export type Env = z.infer<typeof schema>;

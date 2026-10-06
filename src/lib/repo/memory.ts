@@ -11,12 +11,16 @@ import type {
   ConversationState,
   GenerationStatus,
   Message,
+  ReplyClaim,
+  ReplyClaimStatus,
   Service,
 } from "@/lib/types";
+import { APP_SETTINGS_META_DEFAULTS } from "@/lib/types";
 import { buildDemoSeed } from "./demo-seed";
 import type { NewMessage, Repository, UpsertConversationInput } from "./types";
 
 interface Store {
+  claims: Map<string, ReplyClaim>;
   services: Service[];
   conversations: Conversation[];
   settings: Map<string, ConversationSettings>;
@@ -47,6 +51,7 @@ export function defaultAppSettings(ownerId: string): AppSettings {
     checker_min_confidence: 0.85,
     groq_key_encrypted: null,
     groq_key_last4: null,
+    ...APP_SETTINGS_META_DEFAULTS,
     updated_at: now(),
   };
 }
@@ -62,6 +67,7 @@ function createStore(ownerId: string): Store {
     updated_at: now(),
   }));
   const store: Store = {
+    claims: new Map(),
     services,
     conversations: [],
     settings: new Map(),
@@ -232,6 +238,54 @@ export class MemoryRepository implements Repository {
       .slice(-limit);
   }
 
+  async updateMessage(ownerId: string, messageId: string, patch: { sender_type?: Message["sender_type"]; sender_name?: string | null; metadata?: Record<string, unknown> }) {
+    const m = storeFor(ownerId).messages.find((x) => x.id === messageId);
+    if (!m) throw new Error("Message not found");
+    if (patch.sender_type) m.sender_type = patch.sender_type;
+    if (patch.sender_name !== undefined) m.sender_name = patch.sender_name;
+    if (patch.metadata) m.metadata = { ...m.metadata, ...patch.metadata };
+  }
+
+  // JS is single-threaded and there's no await between the check and the write, so this is atomic.
+  async claimReply(ownerId: string, conversationId: string, triggerMessageId: string, reclaimable: ReplyClaimStatus[]) {
+    const s = storeFor(ownerId);
+    const existing = s.claims.get(triggerMessageId);
+    const t = now();
+    if (!existing) {
+      s.claims.set(triggerMessageId, {
+        trigger_message_id: triggerMessageId,
+        owner_id: ownerId,
+        conversation_id: conversationId,
+        status: "PROCESSING",
+        generation_id: null,
+        created_at: t,
+        updated_at: t,
+      });
+      return { claimed: true as const };
+    }
+    if (reclaimable.includes(existing.status)) {
+      existing.status = "PROCESSING";
+      existing.updated_at = t;
+      return { claimed: true as const };
+    }
+    return { claimed: false as const, existing: { ...existing } };
+  }
+
+  async setClaimStatus(ownerId: string, triggerMessageId: string, status: ReplyClaimStatus, generationId?: string | null) {
+    const c = storeFor(ownerId).claims.get(triggerMessageId);
+    if (!c) return;
+    c.status = status;
+    if (generationId !== undefined) c.generation_id = generationId;
+    c.updated_at = now();
+  }
+
+  async listStaleClaims(ownerId: string, olderThanMs: number) {
+    const cutoff = Date.now() - olderThanMs;
+    return [...storeFor(ownerId).claims.values()]
+      .filter((c) => c.status === "PROCESSING" && new Date(c.updated_at).getTime() <= cutoff)
+      .map((c) => ({ ...c }));
+  }
+
   async listServices(ownerId: string) {
     return [...storeFor(ownerId).services].sort((a, b) => a.sort_order - b.sort_order);
   }
@@ -319,6 +373,24 @@ export class MemoryRepository implements Repository {
     const s = storeFor(ownerId);
     s.appSettings = { ...s.appSettings, ...patch, updated_at: now() };
     return { ...s.appSettings };
+  }
+
+  async updateConversationProfile(ownerId: string, conversationId: string, patch: { lead_name?: string; lead_username?: string; lead_avatar_url?: string | null }) {
+    const c = storeFor(ownerId).conversations.find((x) => x.id === conversationId);
+    if (!c) throw new Error("Conversation not found");
+    if (patch.lead_name !== undefined) c.lead_name = patch.lead_name;
+    if (patch.lead_username !== undefined) c.lead_username = patch.lead_username;
+    if (patch.lead_avatar_url !== undefined) c.lead_avatar_url = patch.lead_avatar_url;
+    c.updated_at = now();
+  }
+
+  async findOwnerByMeta(query: { igIds?: string[]; verifyToken?: string }) {
+    for (const [ownerId, s] of stores) {
+      const a = s.appSettings;
+      if (query.verifyToken && a.meta_verify_token && a.meta_verify_token === query.verifyToken) return ownerId;
+      if (query.igIds?.some((id) => id === a.meta_ig_account_id || id === a.meta_ig_scoped_id)) return ownerId;
+    }
+    return null;
   }
 
   async resetDemo(ownerId: string) {

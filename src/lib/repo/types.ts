@@ -7,6 +7,8 @@ import type {
   ConversationState,
   GenerationStatus,
   Message,
+  ReplyClaim,
+  ReplyClaimStatus,
   SenderType,
   Service,
 } from "@/lib/types";
@@ -53,6 +55,27 @@ export interface Repository {
   /** Oldest to newest. */
   listRecentMessages(ownerId: string, conversationId: string, limit: number): Promise<Message[]>;
 
+  updateMessage(
+    ownerId: string,
+    messageId: string,
+    patch: { sender_type?: SenderType; sender_name?: string | null; metadata?: Record<string, unknown> },
+  ): Promise<void>;
+
+  /* reply claims: exactly-once guard per inbound message */
+  /**
+   * Atomically claims the right to answer `triggerMessageId`. Returns claimed=false if a claim already
+   * exists, unless its status is in `reclaimable` (then it's taken over atomically).
+   */
+  claimReply(
+    ownerId: string,
+    conversationId: string,
+    triggerMessageId: string,
+    reclaimable: ReplyClaimStatus[],
+  ): Promise<{ claimed: true } | { claimed: false; existing: ReplyClaim | null }>;
+  setClaimStatus(ownerId: string, triggerMessageId: string, status: ReplyClaimStatus, generationId?: string | null): Promise<void>;
+  /** PROCESSING claims not touched for `olderThanMs`. */
+  listStaleClaims(ownerId: string, olderThanMs: number): Promise<ReplyClaim[]>;
+
   /* services */
   listServices(ownerId: string): Promise<Service[]>;
   saveService(ownerId: string, input: ServiceInput): Promise<Service>;
@@ -74,6 +97,19 @@ export interface Repository {
   /* settings */
   getAppSettings(ownerId: string): Promise<AppSettings>;
   saveAppSettings(ownerId: string, patch: Partial<Omit<AppSettings, "owner_id">>): Promise<AppSettings>;
+
+  /** Updates the lead's display info (name, username, avatar). */
+  updateConversationProfile(
+    ownerId: string,
+    conversationId: string,
+    patch: { lead_name?: string; lead_username?: string; lead_avatar_url?: string | null },
+  ): Promise<void>;
+
+  /**
+   * UNAUTHENTICATED lookup used only by the Instagram webhook to find whose account an event
+   * belongs to. Match by Instagram account id(s) or by webhook verify token.
+   */
+  findOwnerByMeta(query: { igIds?: string[]; verifyToken?: string }): Promise<string | null>;
 
   /* demo only */
   resetDemo?(ownerId: string): Promise<void>;

@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUserForAction } from "@/lib/auth";
-import { encryptSecret } from "@/lib/crypto";
-import { getEnv, isDemoMode } from "@/lib/env";
+import { encryptForStorage } from "@/lib/secrets";
+import { isDemoMode } from "@/lib/env";
 import { getRepository } from "@/lib/repo";
 import { rateLimit } from "@/lib/rate-limit";
 import {
@@ -26,6 +26,7 @@ import {
   setAutoChat,
   takeOverConversation,
 } from "@/lib/services/conversation-ops";
+import { connectInstagram, disconnectInstagram, refreshInstagramToken } from "@/lib/services/instagram/token";
 import { ingestInboundEvent } from "@/lib/services/ingest";
 import { createAuthClient } from "@/lib/supabase/clients";
 import { errorMessage } from "@/lib/utils";
@@ -98,6 +99,7 @@ export async function runAiNowAction(conversationId: string, forceBadDraft = fal
     const outcome = await runPipeline({
       ownerId,
       conversationId: idSchema.parse(conversationId),
+      manual: true,
       demo: isDemoMode() ? { forceBadDraft } : undefined,
     });
     refreshAll();
@@ -207,12 +209,42 @@ export async function saveSettingsAction(input: unknown): Promise<ActionResult> 
 export async function saveGroqKeyAction(key: string): Promise<ActionResult> {
   return guarded("saveGroqKey", async (ownerId) => {
     const secret = groqKeySchema.parse(key);
-    const encKey = getEnv().APP_ENCRYPTION_KEY;
-    if (!encKey) throw new Error("Set APP_ENCRYPTION_KEY on the server before saving a key (openssl rand -base64 32).");
     await getRepository().saveAppSettings(ownerId, {
-      groq_key_encrypted: encryptSecret(secret, encKey),
+      groq_key_encrypted: encryptForStorage(secret),
       groq_key_last4: secret.slice(-4),
     });
+    refreshAll();
+  });
+}
+
+const connectInstagramSchema = z.object({
+  access_token: z.string().trim().min(20, "That doesn't look like an Instagram access token").max(1000),
+  app_secret: z.string().trim().min(16, "That doesn't look like an Instagram app secret").max(200),
+});
+
+export async function connectInstagramAction(input: unknown): Promise<ActionResult<{ username: string | null; warnings: string[] }>> {
+  return guarded("connectInstagram", async (ownerId) => {
+    if (isDemoMode()) throw new Error("Demo mode uses a simulated Instagram. Set up Supabase to connect a real account.");
+    const parsed = connectInstagramSchema.parse(input);
+    const res = await connectInstagram(ownerId, { accessToken: parsed.access_token, appSecret: parsed.app_secret });
+    refreshAll();
+    return { username: res.username, warnings: res.warnings };
+  });
+}
+
+export async function refreshInstagramTokenAction(): Promise<ActionResult<{ expiresAt: string }>> {
+  return guarded("refreshInstagramToken", async (ownerId) => {
+    if (isDemoMode()) throw new Error("Not available in demo mode.");
+    const res = await refreshInstagramToken(ownerId);
+    refreshAll();
+    return res;
+  });
+}
+
+export async function disconnectInstagramAction(): Promise<ActionResult> {
+  return guarded("disconnectInstagram", async (ownerId) => {
+    if (isDemoMode()) throw new Error("Not available in demo mode.");
+    await disconnectInstagram(ownerId);
     refreshAll();
   });
 }

@@ -51,6 +51,9 @@ export function ChatHeader({ conv, onOpenConfig, onNotice }: { conv: Conversatio
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500">
             <span className="truncate">@{conv.lead_username}</span>
             <LeadTypeChip type={conv.settings.lead_type} />
+            <button type="button" onClick={onOpenConfig} className="rounded-full border border-zinc-200 px-2 py-0.5 hover:bg-zinc-50" title="Choose which services the AI may pitch in this chat">
+              Services: {conv.settings.all_services ? "All" : `${conv.service_ids.length} selected`}
+            </button>
             <span className="hidden sm:inline"><StageBadge stage={conv.state.conversation_stage} /></span>
           </div>
         </div>

@@ -61,7 +61,7 @@ export async function saveConversationConfig(ownerId: string, conversationId: st
 export async function sendManualMessage(ownerId: string, conversationId: string, text: string) {
   const repo = getRepository();
   const conv = await mustGet(ownerId, conversationId);
-  const sent = await getInstagramService().sendMessage({
+  const sent = await (await getInstagramService(ownerId)).sendMessage({
     externalThreadId: conv.external_thread_id,
     recipientExternalId: conv.lead_external_id ?? conv.external_thread_id,
     text,
@@ -84,7 +84,7 @@ export async function approveGeneration(ownerId: string, generationId: string, t
   if (gen.status !== "PENDING_REVIEW") throw new Error("This draft was already handled");
   const conv = await mustGet(ownerId, gen.conversation_id);
 
-  const sent = await getInstagramService().sendMessage({
+  const sent = await (await getInstagramService(ownerId)).sendMessage({
     externalThreadId: conv.external_thread_id,
     recipientExternalId: conv.lead_external_id ?? conv.external_thread_id,
     text,

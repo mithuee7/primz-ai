@@ -12,7 +12,7 @@ export default async function ServicesPage() {
     <div className="scroll-thin h-full overflow-y-auto p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Services"
-        description="The only things the AI is allowed to pitch. Seeded from primz-ai.onrender.com, so review and edit them."
+        description="The only things the AI is allowed to pitch. Turn them on or off per chat, in each chat’s settings."
       />
       <ServicesManager services={services} />
     </div>

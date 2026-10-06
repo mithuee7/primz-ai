@@ -26,7 +26,7 @@ npm run dev                    # http://localhost:3000
 
 Demo mode seeds four chats (dentist, real estate, UGC creator, local business) at different stages, uses in-memory data (resets on restart), and a mock Instagram. A yellow banner shows whenever demo mode is on.
 
-With no Groq key, demo mode uses a **scripted stand-in** (`src/lib/services/llm/demo.ts`). It is keyword rules, not an AI. Add a Groq key (Settings or `GROQ_API_KEY`) to use the real models.
+With no Groq key, demo mode uses a **scripted stand-in** (`src/lib/services/llm/demo.ts`). It is keyword rules, not an AI. Add a Groq key (in Settings) to use the real models.
 
 In a chat, open the sliders icon → **Demo tools** to simulate lead messages, force a bad draft to watch the checker reject it, and reset data.
 
@@ -38,56 +38,65 @@ npm run build
 
 ## Environment variables
 
+Only the Supabase connection lives in environment variables. Groq and Instagram details are entered in **Settings** and stored encrypted in your database.
+
 | Variable | Required | Notes |
 |---|---|---|
-| `DEMO_MODE` | no | `true` forces demo. Also on automatically if Supabase vars are missing. |
 | `NEXT_PUBLIC_SUPABASE_URL` | for real use | |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | for real use | Used for auth only. |
-| `SUPABASE_SERVICE_ROLE_KEY` | for real use | **Server only.** |
-| `GROQ_API_KEY` | one of these | Or save a key in Settings (needs `APP_ENCRYPTION_KEY`). |
-| `APP_ENCRYPTION_KEY` | to save keys in UI | `openssl rand -base64 32` |
-| `GROQ_MODEL`, `GROQ_CHECKER_MODEL` | no | Default `llama-3.3-70b-versatile`. Also editable in Settings. |
+| `SUPABASE_SERVICE_ROLE_KEY` | for real use | **Server only.** Also used to derive the key that encrypts saved secrets. |
+| `NODE_VERSION` | on Render | `22` |
+| `DEMO_MODE` | no | `true` forces demo. Also on automatically if Supabase vars are missing. |
+| `GROQ_API_KEY` | no | Fallback if you didn't save a key in Settings. |
+| `APP_ENCRYPTION_KEY` | no | Overrides the encryption key. Changing either key makes saved secrets unreadable; paste them again. |
 | `CHECKER_MIN_CONFIDENCE` | no | Default 0.85. Editable in Settings. |
-| `META_APP_SECRET`, `META_VERIFY_TOKEN`, `META_PAGE_ACCESS_TOKEN`, `META_IG_BUSINESS_ACCOUNT_ID` | for Instagram | See below. |
-| `OWNER_USER_ID` | for webhook | Supabase user id that owns incoming webhook chats (single-tenant for now). |
-
-Only `NEXT_PUBLIC_*` values reach the browser. Secrets are read in server-only modules; the saved Groq key is AES-256-GCM encrypted and never sent back to the client.
 
 ## Database setup
 
 1. Create a Supabase project.
-2. Run `supabase/migrations/0001_init.sql` in the SQL editor (tables, foreign keys, indexes, RLS, profile trigger).
-3. Fill in the three Supabase env vars, set `DEMO_MODE=false`, restart.
-4. Create an account on `/login`. On first use the app seeds default settings and the services list for that user.
+2. Run `supabase/migrations/0001_init.sql`, then `supabase/migrations/0002_instagram_and_idempotency.sql` in the SQL editor. **0002 is required**: it adds the Instagram settings columns and the `reply_claims` table the one-reply-per-message guarantee depends on. Without it, replies fail closed (nothing is sent).
+3. Set the three Supabase env vars, `DEMO_MODE=false`, redeploy.
+4. Create an account on `/login`.
 
-RLS restricts every table to `owner_id = auth.uid()`. `app_settings` has no policies on purpose (service role only). The server uses the service-role key **and** scopes every query by `owner_id`, so authorization does not depend on RLS alone.
+RLS restricts every table to `owner_id = auth.uid()`. `app_settings` has no policies on purpose (service role only). The server also scopes every query by `owner_id`.
+
+## Connecting Instagram
+
+1. In Settings -> Instagram connection, paste the Instagram access token and the Instagram app secret, then **Connect & verify**. The app checks the token with Instagram, upgrades it to a long-lived one when it can, shows the @username and days left.
+2. Copy the **Callback URL** and **Verify token** shown there into Meta (Instagram -> Webhooks) and subscribe to `messages`.
+3. Test with a second Instagram account that has a role on your Meta app.
+
+Tokens last ~60 days. The app refreshes the token automatically once 20 or fewer days remain (and there is a "Refresh token now" button). Refresh runs when the app handles a page load or webhook, so if nobody uses the app for 60 days the token can still expire; paste a new one then.
+
+## One reply per message
+
+Meta re-sends a webhook if it isn't answered quickly. Protection, in layers:
+
+1. The webhook stores each message under its Instagram message id (unique per account) and returns 200 right away. Redeliveries of the same id are dropped.
+2. Profile lookup, history backfill and the AI run happen after the response.
+3. Before generating anything, the pipeline claims the inbound message id in `reply_claims` (primary key = message id). Only one run can ever hold a claim, even across server instances.
+4. A claim that is SENT, PROCESSING or UNKNOWN is never retaken. Only "nothing was sent" outcomes (aborted, or held for review/failed when a person presses Run AI now) can be retaken.
+5. If a send times out or returns 5xx, delivery is unknown. The app does NOT retry; it marks the claim UNKNOWN and flags the chat so you check Instagram.
+6. A run that dies mid-way leaves a stale PROCESSING claim; it is swept to SENT (if our reply is stored) or UNKNOWN + flagged.
+7. A throttled recovery picks up lead messages left unanswered for 90s-30min (auto chat on), also guarded by the claim.
+
+Result: at most one reply per inbound message. The cost is that in a rare ambiguous failure the AI stays silent and asks a human, rather than risk a duplicate.
 
 ## What is mocked
 
 | Piece | Status |
 |---|---|
-| Instagram send/read | `MockInstagramService`. Messages are stored and labelled "simulated". Nothing is delivered. |
-| Meta implementation | `meta.ts` is partial: webhook signature check, GET handshake and payload parsing are written; `sendMessage`, `getProfile`, `getMessages`, `getConversation` throw "not implemented". |
+| Instagram in demo mode | `MockInstagramService`. Nothing is delivered. |
+| Instagram live | Send, profile, history, token connect/refresh and webhook are implemented but **not tested against a live Instagram account** here. |
 | AI without a key (demo only) | Scripted `DemoLLM`, clearly labelled. |
-| Data in demo mode | In memory, seeded demo conversations. |
-
-## Connecting Instagram
-
-Not done yet. Exact steps:
-
-1. Create a Meta app; add the Instagram messaging product; connect an Instagram **Professional** account.
-2. Set `META_APP_SECRET`, `META_VERIFY_TOKEN` (any string you choose), `META_PAGE_ACCESS_TOKEN`, `META_IG_BUSINESS_ACCOUNT_ID`, and `OWNER_USER_ID`.
-3. Deploy over HTTPS. In the Meta app webhook settings use `https://YOUR_DOMAIN/api/webhooks/instagram` and your verify token; subscribe to `messages`.
-4. Implement the `TODO(meta)` methods in `src/lib/services/instagram/meta.ts` (send via the Graph API messages endpoint, profile lookup, history backfill, 429/5xx handling). Nothing else in the app needs to change.
-5. Validate `parseMetaMessagingPayload` against real payloads, including echoes of DMs you send manually from the Instagram app.
-6. Request `instagram_manage_messages` and pass App Review. Mind Meta's messaging window rules.
-7. Only then should the status badge claim a connection. Today `getStatus()` always reports not connected.
 
 ## Known limitations
 
 - **Untested against live services:** Groq calls, the Supabase repository, and Meta have not been run against the real things in this environment (no keys). The in-memory path, pipeline logic and UI are tested.
 - Rate limiting is in-memory per process; use a shared store (Redis/Supabase) on serverless or multi-instance hosting.
-- The webhook is single-tenant (`OWNER_USER_ID`).
+- The webhook finds the owner by Instagram account id, so several users can each connect their own account.
+- Render free tier sleeps; the first webhook after a sleep may be slow and Meta will retry (safe, deduplicated).
+- Meta may restrict messaging people without a role on your app until the app passes review.
 - The chat view polls every 6 seconds rather than using realtime subscriptions.
 - Service seed data comes from what primz-ai.onrender.com says publicly, which is brief. **Review and edit it on the Services page**; the AI treats those rows as its only source of truth.
 - Webhook processing runs after the response via `after()`; on hosts that cut work off after responding, move it to a queue.

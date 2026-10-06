@@ -1,9 +1,9 @@
 "use client";
 
-import { CheckCircle2, KeyRound, Loader2, Trash2 } from "lucide-react";
+import { CheckCircle2, KeyRound, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { clearGroqKeyAction, saveGroqKeyAction, saveSettingsAction } from "@/app/actions";
+import { clearGroqKeyAction, connectInstagramAction, disconnectInstagramAction, refreshInstagramTokenAction, saveGroqKeyAction, saveSettingsAction } from "@/app/actions";
 import { Badge, Button, Card } from "@/components/ui/primitives";
 import { TONES, TONE_LABELS, type PublicAppSettings, type Tone } from "@/lib/types";
 
@@ -11,7 +11,8 @@ export interface SettingsViewProps {
   settings: PublicAppSettings;
   llm: { provider: "groq" | "demo" | "none"; source: "settings" | "env" | "none" };
   instagram: { kind: "mock" | "meta"; connected: boolean; label: string; detail: string };
-  encryptionConfigured: boolean;
+  callbackUrl: string;
+  daysLeft: number | null;
   demo: boolean;
 }
 
@@ -25,7 +26,7 @@ function Section({ title, description, children }: { title: string; description?
   );
 }
 
-export function SettingsForm({ settings, llm, instagram, encryptionConfigured, demo }: SettingsViewProps) {
+export function SettingsForm({ settings, llm, instagram, callbackUrl, daysLeft, demo }: SettingsViewProps) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -38,6 +39,8 @@ export function SettingsForm({ settings, llm, instagram, encryptionConfigured, d
   const [checkerModel, setCheckerModel] = useState(settings.checker_model);
   const [minConf, setMinConf] = useState(settings.checker_min_confidence);
   const [key, setKey] = useState("");
+  const [igToken, setIgToken] = useState("");
+  const [igSecret, setIgSecret] = useState("");
 
   const report = (res: { ok: boolean; error?: string }, okText: string) => {
     setMsg(res.ok ? { ok: true, text: okText } : { ok: false, text: res.error ?? "Failed" });
@@ -61,7 +64,7 @@ export function SettingsForm({ settings, llm, instagram, encryptionConfigured, d
           <label htmlFor="groq-key" className="label">API key</label>
           <div className="flex gap-2">
             <input id="groq-key" type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} placeholder={settings.groq_key_saved ? "Saved. Paste a new key to replace it" : "gsk_…"} className="field" />
-            <Button disabled={pending || key.trim().length < 20 || !encryptionConfigured} onClick={() => start(async () => { const r = await saveGroqKeyAction(key); if (r.ok) setKey(""); report(r, "Key saved (encrypted). It is never shown again."); })}>
+            <Button disabled={pending || key.trim().length < 20} onClick={() => start(async () => { const r = await saveGroqKeyAction(key); if (r.ok) setKey(""); report(r, "Key saved (encrypted). It is never shown again."); })}>
               <KeyRound className="h-4 w-4" /> Save
             </Button>
             {settings.groq_key_saved ? (
@@ -70,11 +73,7 @@ export function SettingsForm({ settings, llm, instagram, encryptionConfigured, d
               </Button>
             ) : null}
           </div>
-          <p className="mt-1.5 text-xs text-zinc-500">
-            {encryptionConfigured
-              ? "Stored encrypted (AES-256-GCM) on the server. Never sent back to the browser."
-              : "Set APP_ENCRYPTION_KEY on the server to save a key here, or set GROQ_API_KEY as an environment variable."}
-          </p>
+          <p className="mt-1.5 text-xs text-zinc-500">Stored encrypted (AES-256-GCM) on the server. Never sent back to the browser.</p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
@@ -93,14 +92,59 @@ export function SettingsForm({ settings, llm, instagram, encryptionConfigured, d
         </div>
       </Section>
 
-      <Section title="Instagram connection">
+      <Section title="Instagram connection" description="Paste your Instagram access token and app secret. They are stored encrypted and never shown again.">
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={instagram.connected ? "green" : "amber"}>{instagram.label}</Badge>
           <span className="text-sm text-zinc-500">{instagram.detail}</span>
         </div>
         {instagram.kind === "mock" ? (
-          <p className="text-sm text-zinc-500">Demo mode uses a simulated Instagram. Real connection steps are in the README under “Connecting Instagram”.</p>
-        ) : null}
+          <p className="text-sm text-zinc-500">Demo mode uses a simulated Instagram. Nothing is sent to real accounts.</p>
+        ) : (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="ig-token" className="label">Access token</label>
+                <input id="ig-token" type="password" autoComplete="off" value={igToken} onChange={(e) => setIgToken(e.target.value)} placeholder={settings.meta_token_saved ? "Saved. Paste a new one to replace it" : "IG…"} className="field" />
+              </div>
+              <div>
+                <label htmlFor="ig-secret" className="label">Instagram app secret</label>
+                <input id="ig-secret" type="password" autoComplete="off" value={igSecret} onChange={(e) => setIgSecret(e.target.value)} placeholder={settings.meta_app_secret_saved ? "Saved. Paste a new one to replace it" : "App secret"} className="field" />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button disabled={pending || igToken.trim().length < 20 || igSecret.trim().length < 16} onClick={() => start(async () => {
+                const r = await connectInstagramAction({ access_token: igToken, app_secret: igSecret });
+                if (r.ok) { setIgToken(""); setIgSecret(""); }
+                report(r.ok ? { ok: true } : r, r.ok ? `Connected${r.data?.username ? ` as @${r.data.username}` : ""}.${r.data?.warnings.length ? " " + r.data.warnings.join(" ") : ""}` : "");
+              })}>
+                <KeyRound className="h-4 w-4" /> Connect &amp; verify
+              </Button>
+              {settings.meta_token_saved ? (
+                <>
+                  <Button variant="secondary" disabled={pending} onClick={() => start(async () => report(await refreshInstagramTokenAction(), "Token refreshed. It is valid for another ~60 days."))}>
+                    <RefreshCw className="h-4 w-4" /> Refresh token now
+                  </Button>
+                  <Button variant="dangerOutline" disabled={pending} onClick={() => { if (window.confirm("Disconnect Instagram? Auto replies will stop.")) start(async () => report(await disconnectInstagramAction(), "Disconnected.")); }}>
+                    Disconnect
+                  </Button>
+                </>
+              ) : null}
+            </div>
+            {settings.meta_token_saved && daysLeft !== null ? (
+              <p className="text-xs text-zinc-500">
+                Token expires in {Math.max(daysLeft, 0)} days{settings.meta_ig_username ? ` (@${settings.meta_ig_username})` : ""}. It is refreshed automatically when it gets close, as long as the app is being used.
+              </p>
+            ) : null}
+            <div className="rounded-xl bg-zinc-50 p-3 text-xs text-zinc-600">
+              <p className="font-medium text-zinc-800">Webhook settings to paste into Meta (Instagram → Webhooks)</p>
+              <p className="mt-2">Callback URL</p>
+              <code className="block break-all rounded bg-white px-2 py-1">{callbackUrl}</code>
+              <p className="mt-2">Verify token</p>
+              <code className="block break-all rounded bg-white px-2 py-1">{settings.meta_verify_token ?? "Appears after you connect"}</code>
+              <p className="mt-2">Subscribe to the <b>messages</b> field.</p>
+            </div>
+          </>
+        )}
       </Section>
 
       <Section title="Defaults for new conversations">
