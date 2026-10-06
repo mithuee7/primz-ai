@@ -59,30 +59,48 @@ function reviewRow(r: AiReview): AiReview {
 }
 
 const initialized = new Set<string>();
+const initializing = new Map<string, Promise<void>>();
 
 export class SupabaseRepository implements Repository {
   private db: SupabaseClient = createAdminClient();
 
   /** First touch for an owner: create settings + seed default services. */
-  private async init(ownerId: string) {
-    if (initialized.has(ownerId)) return;
-    const { data, error } = await this.db.from("app_settings").select("owner_id").eq("owner_id", ownerId).maybeSingle();
-    if (error) throw new Error(`init: ${error.message}`);
-    if (!data) {
-      const { owner_id: _o, updated_at: _u, ...defaults } = defaultAppSettings(ownerId);
-      must(await this.db.from("app_settings").insert({ owner_id: ownerId, ...defaults }).select().single(), "init settings");
-      const { count } = await this.db.from("services").select("id", { count: "exact", head: true }).eq("owner_id", ownerId);
-      if (!count) {
-        must(
-          await this.db
-            .from("services")
-            .insert(DEFAULT_SERVICES.map((s, i) => ({ ...s, owner_id: ownerId, sort_order: i, is_active: true })))
-            .select(),
-          "seed services",
-        );
-      }
+  private init(ownerId: string): Promise<void> {
+    if (initialized.has(ownerId)) return Promise.resolve();
+    // A page load fires several queries at once. Share one in-flight init per owner.
+    let inflight = initializing.get(ownerId);
+    if (!inflight) {
+      inflight = this.runInit(ownerId)
+        .then(() => {
+          initialized.add(ownerId);
+        })
+        .finally(() => initializing.delete(ownerId));
+      initializing.set(ownerId, inflight);
     }
-    initialized.add(ownerId);
+    return inflight;
+  }
+
+  private async runInit(ownerId: string) {
+    const { owner_id: _o, updated_at: _u, ...defaults } = defaultAppSettings(ownerId);
+    // ON CONFLICT DO NOTHING: safe across concurrent requests and multiple server instances.
+    // Only the request that actually inserted the row gets it back, and only that one seeds services.
+    const res = await this.db
+      .from("app_settings")
+      .upsert({ owner_id: ownerId, ...defaults }, { onConflict: "owner_id", ignoreDuplicates: true })
+      .select("owner_id");
+    const inserted = must(res, "init settings");
+    if (inserted.length === 0) return;
+
+    const { count } = await this.db.from("services").select("id", { count: "exact", head: true }).eq("owner_id", ownerId);
+    if (!count) {
+      must(
+        await this.db
+          .from("services")
+          .insert(DEFAULT_SERVICES.map((s, i) => ({ ...s, owner_id: ownerId, sort_order: i, is_active: true })))
+          .select(),
+        "seed services",
+      );
+    }
   }
 
   async listConversations(ownerId: string) {
