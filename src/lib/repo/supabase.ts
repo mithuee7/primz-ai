@@ -414,7 +414,11 @@ export class SupabaseRepository implements Repository {
     } else if (query.igIds?.length) {
       // Ids come from an unauthenticated payload and go into a filter string: digits only.
       const ids = query.igIds.filter((id) => /^\d{5,25}$/.test(id));
-      if (ids.length === 0) return null;
+      console.log("[findOwnerByMeta] received igIds:", query.igIds, "after filter:", ids);
+      if (ids.length === 0) {
+        console.error("[findOwnerByMeta] NO ids passed the filter regex /^\\d{5,25}$/");
+        return null;
+      }
       q = q.or(ids.map((id) => `meta_ig_account_id.eq.${id},meta_ig_scoped_id.eq.${id}`).join(","));
     } else {
       return null;

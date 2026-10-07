@@ -43,14 +43,21 @@ export async function POST(request: NextRequest) {
   let entryIds: string[];
   try {
     entryIds = extractEntryIds(JSON.parse(rawBody));
-  } catch {
+  } catch (err) {
+    console.error("[webhook] extract failed:", err instanceof Error ? err.message : "unknown");
     return new NextResponse("Bad request", { status: 400 });
   }
 
+  console.log("[webhook] extracted entryIds:", entryIds);
+
   const repo = getRepository();
   const ownerId = await repo.findOwnerByMeta({ igIds: entryIds });
+  console.log("[webhook] findOwnerByMeta result:", ownerId ? "found" : "NOT FOUND");
   const cfg = ownerId ? await loadMetaConfig(ownerId) : null;
-  if (!ownerId || !cfg) return new NextResponse("Unknown account", { status: 401 });
+  if (!ownerId || !cfg) {
+    console.error("[webhook] account not found or config missing. entryIds:", entryIds, "ownerId:", ownerId);
+    return new NextResponse("Unknown account", { status: 401 });
+  }
 
   await ensureFreshInstagramToken(ownerId);
   const ig = new MetaInstagramService((await loadMetaConfig(ownerId)) ?? cfg);
@@ -58,8 +65,12 @@ export async function POST(request: NextRequest) {
   let events;
   try {
     events = await ig.handleWebhook(rawBody, request.headers); // verifies the signature
+    console.log("[webhook] signature verified, events parsed:", events.length);
   } catch (err) {
-    if (err instanceof WebhookValidationError) return new NextResponse("Invalid signature", { status: 401 });
+    if (err instanceof WebhookValidationError) {
+      console.error("[webhook] signature verification FAILED:", err.message);
+      return new NextResponse("Invalid signature", { status: 401 });
+    }
     if (err instanceof InstagramNotConfiguredError) return new NextResponse("Instagram integration not configured", { status: 503 });
     console.error("[webhook] parse failure:", err instanceof Error ? err.message : "unknown");
     return new NextResponse("Bad request", { status: 400 });
