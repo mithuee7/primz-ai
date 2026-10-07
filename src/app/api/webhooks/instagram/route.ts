@@ -64,11 +64,20 @@ export async function POST(request: NextRequest) {
 
   let events;
   try {
+    // DEBUG: Check what we're trying to verify
+    const sig = request.headers.get("x-hub-signature-256");
+    console.log("[webhook-debug] signature header:", sig?.substring(0, 30) + "...");
+    console.log("[webhook-debug] appSecret from config:", cfg.appSecret?.substring(0, 10) + "...");
+    console.log("[webhook-debug] rawBody length:", rawBody.length);
+    console.log("[webhook-debug] rawBody preview:", rawBody.substring(0, 150));
+    
     events = await ig.handleWebhook(rawBody, request.headers); // verifies the signature
     console.log("[webhook] signature verified, events parsed:", events.length);
   } catch (err) {
     if (err instanceof WebhookValidationError) {
       console.error("[webhook] signature verification FAILED:", err.message);
+      console.error("[webhook-debug] appSecret is:", cfg.appSecret ? "NOT NULL" : "NULL");
+      console.error("[webhook-debug] sig header:", request.headers.get("x-hub-signature-256")?.substring(0, 30));
       return new NextResponse("Invalid signature", { status: 401 });
     }
     if (err instanceof InstagramNotConfiguredError) return new NextResponse("Instagram integration not configured", { status: 503 });
