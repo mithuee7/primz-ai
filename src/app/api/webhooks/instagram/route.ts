@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { after, NextResponse, type NextRequest } from "next/server";
 import { getRepository } from "@/lib/repo";
 import { rateLimit } from "@/lib/rate-limit";
@@ -13,8 +14,29 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * GET: Meta's subscription handshake. The verify token is the one the app generated in
- * Settings, so the owner is found by matching it.
+ * Validates Meta x-hub-signature-256 header against the raw request body.
+ */
+function verifyMetaSignature(rawBody: string, signatureHeader: string | null, appSecret: string): boolean {
+  if (!signatureHeader || !appSecret) return false;
+
+  const receivedHash = signatureHeader.replace(/^sha256=/, "").trim();
+  const secret = appSecret.trim();
+
+  const computedHash = crypto
+    .createHmac("sha256", secret)
+    .update(rawBody, "utf-8")
+    .digest("hex");
+
+  const receivedBuffer = Buffer.from(receivedHash, "utf-8");
+  const computedBuffer = Buffer.from(computedHash, "utf-8");
+
+  if (receivedBuffer.length !== computedBuffer.length) return false;
+
+  return crypto.timingSafeEqual(receivedBuffer, computedBuffer);
+}
+
+/**
+ * GET: Meta's subscription handshake.
  */
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
@@ -30,8 +52,6 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST: incoming Instagram messages.
- * find owner by Instagram account id -> verify signature with THAT owner's app secret ->
- * store (idempotent) -> if auto chat is on, run the AI pipeline after responding.
  */
 export async function POST(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
@@ -39,7 +59,6 @@ export async function POST(request: NextRequest) {
 
   const rawBody = await request.text(); // raw bytes are required for signature verification
 
-  // The body isn't trusted yet: it is only used to pick which stored app secret to verify against.
   let entryIds: string[];
   try {
     entryIds = extractEntryIds(JSON.parse(rawBody));
@@ -60,24 +79,33 @@ export async function POST(request: NextRequest) {
   }
 
   await ensureFreshInstagramToken(ownerId);
-  const ig = new MetaInstagramService((await loadMetaConfig(ownerId)) ?? cfg);
+  const freshCfg = (await loadMetaConfig(ownerId)) ?? cfg;
+  const ig = new MetaInstagramService(freshCfg);
+
+  const sigHeader = request.headers.get("x-hub-signature-256");
+
+  // 1. Direct HMAC Verification check
+  const isValidSig = verifyMetaSignature(rawBody, sigHeader, freshCfg.appSecret);
+  if (!isValidSig) {
+    console.error("[webhook] Direct signature verification FAILED");
+    console.error("[webhook-debug] Received Header:", sigHeader);
+    console.error("[webhook-debug] AppSecret Used:", freshCfg.appSecret ? `${freshCfg.appSecret.substring(0, 8)}...` : "NULL");
+    return new NextResponse("Invalid signature", { status: 401 });
+  }
+
+  // 2. Prepare headers compatible with both Web API Headers and Node Plain Objects
+  const headersObject = Object.fromEntries(request.headers.entries());
+  const compatibleHeaders = Object.assign(headersObject, {
+    get: (key: string) => request.headers.get(key),
+  });
 
   let events;
   try {
-    // DEBUG: Check what we're trying to verify
-    const sig = request.headers.get("x-hub-signature-256");
-    console.log("[webhook-debug] signature header:", sig?.substring(0, 30) + "...");
-    console.log("[webhook-debug] appSecret from config:", cfg.appSecret?.substring(0, 10) + "...");
-    console.log("[webhook-debug] rawBody length:", rawBody.length);
-    console.log("[webhook-debug] rawBody preview:", rawBody.substring(0, 150));
-    
-    events = await ig.handleWebhook(rawBody, request.headers); // verifies the signature
+    events = await ig.handleWebhook(rawBody, compatibleHeaders as unknown as Headers);
     console.log("[webhook] signature verified, events parsed:", events.length);
   } catch (err) {
     if (err instanceof WebhookValidationError) {
-      console.error("[webhook] signature verification FAILED:", err.message);
-      console.error("[webhook-debug] appSecret is:", cfg.appSecret ? "NOT NULL" : "NULL");
-      console.error("[webhook-debug] sig header:", request.headers.get("x-hub-signature-256")?.substring(0, 30));
+      console.error("[webhook] ig.handleWebhook validation failed:", err.message);
       return new NextResponse("Invalid signature", { status: 401 });
     }
     if (err instanceof InstagramNotConfiguredError) return new NextResponse("Instagram integration not configured", { status: 503 });
@@ -85,15 +113,10 @@ export async function POST(request: NextRequest) {
     return new NextResponse("Bad request", { status: 400 });
   }
 
-  // Meta re-delivers any webhook that isn't answered with a 2xx quickly. So this route only does
-  // fast local work (store each event under its unique message id; duplicates are dropped) and
-  // answers 200. Instagram lookups and the AI run happen after the response, and the reply_claims
-  // table guarantees one reply per inbound message id however many times Meta retries.
   const accepted: IngestResult[] = [];
   try {
     for (const event of events) accepted.push(await ingestInboundEvent(ownerId, event));
   } catch (err) {
-    // Non-2xx so Meta retries; storage is idempotent so retries are safe.
     console.error("[webhook] storage failure:", err instanceof Error ? err.message : "unknown");
     return new NextResponse("Storage error", { status: 500 });
   }
