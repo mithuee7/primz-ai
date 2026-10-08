@@ -15,9 +15,13 @@ export const maxDuration = 60;
 
 /**
  * Validates Meta x-hub-signature-256 header directly against the raw binary request buffer.
+ * Prints exact received vs. computed HMAC SHA-256 hashes for precise debugging.
  */
 function verifyMetaSignature(rawBuffer: Buffer, signatureHeader: string | null, appSecret: string): boolean {
-  if (!signatureHeader || !appSecret) return false;
+  if (!signatureHeader || !appSecret) {
+    console.error("[webhook-debug] Signature check failed: missing header or secret");
+    return false;
+  }
 
   const receivedHash = signatureHeader.replace(/^sha256=/, "").trim();
   const secret = appSecret.trim();
@@ -28,10 +32,20 @@ function verifyMetaSignature(rawBuffer: Buffer, signatureHeader: string | null, 
     .update(rawBuffer)
     .digest("hex");
 
+  console.log("[webhook-debug] --------------------------------------------------");
+  console.log("[webhook-debug] RECEIVED FROM META:    ", receivedHash);
+  console.log("[webhook-debug] COMPUTED BY SERVER:  ", computedHash);
+  console.log("[webhook-debug] SECRET KEY PREFIX:    ", secret.substring(0, 10));
+  console.log("[webhook-debug] RAW BUFFER BYTE SIZE: ", rawBuffer.length);
+  console.log("[webhook-debug] --------------------------------------------------");
+
   const receivedBuffer = Buffer.from(receivedHash, "utf-8");
   const computedBuffer = Buffer.from(computedHash, "utf-8");
 
-  if (receivedBuffer.length !== computedBuffer.length) return false;
+  if (receivedBuffer.length !== computedBuffer.length) {
+    console.error("[webhook-debug] Buffer length mismatch:", receivedBuffer.length, "vs", computedBuffer.length);
+    return false;
+  }
 
   return crypto.timingSafeEqual(receivedBuffer, computedBuffer);
 }
@@ -88,12 +102,10 @@ export async function POST(request: NextRequest) {
 
   const sigHeader = request.headers.get("x-hub-signature-256");
 
-  // 2. Perform timing-safe binary HMAC verification
+  // 2. Perform timing-safe binary HMAC verification with hash logs
   const isValidSig = verifyMetaSignature(rawBuffer, sigHeader, freshCfg.appSecret);
   if (!isValidSig) {
     console.error("[webhook] Direct signature verification FAILED");
-    console.error("[webhook-debug] Received Header:", sigHeader);
-    console.error("[webhook-debug] AppSecret Prefix:", freshCfg.appSecret ? `${freshCfg.appSecret.substring(0, 8)}...` : "NULL");
     return new NextResponse("Invalid signature", { status: 401 });
   }
 
