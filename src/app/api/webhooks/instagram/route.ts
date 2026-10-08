@@ -14,17 +14,18 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * Validates Meta x-hub-signature-256 header against the raw request body.
+ * Validates Meta x-hub-signature-256 header directly against the raw binary request buffer.
  */
-function verifyMetaSignature(rawBody: string, signatureHeader: string | null, appSecret: string): boolean {
+function verifyMetaSignature(rawBuffer: Buffer, signatureHeader: string | null, appSecret: string): boolean {
   if (!signatureHeader || !appSecret) return false;
 
   const receivedHash = signatureHeader.replace(/^sha256=/, "").trim();
   const secret = appSecret.trim();
 
+  // Compute HMAC directly on the exact raw binary buffer sent by Meta
   const computedHash = crypto
     .createHmac("sha256", secret)
-    .update(rawBody, "utf-8")
+    .update(rawBuffer)
     .digest("hex");
 
   const receivedBuffer = Buffer.from(receivedHash, "utf-8");
@@ -57,7 +58,10 @@ export async function POST(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   if (!rateLimit(`webhook:${ip}`, 300, 60_000).ok) return new NextResponse("Too many requests", { status: 429 });
 
-  const rawBody = await request.text(); // raw bytes are required for signature verification
+  // 1. Read exact binary bytes to prevent UTF-8 string encoding discrepancies
+  const arrayBuffer = await request.arrayBuffer();
+  const rawBuffer = Buffer.from(arrayBuffer);
+  const rawBody = rawBuffer.toString("utf-8");
 
   let entryIds: string[];
   try {
@@ -84,16 +88,16 @@ export async function POST(request: NextRequest) {
 
   const sigHeader = request.headers.get("x-hub-signature-256");
 
-  // 1. Direct HMAC Verification check
-  const isValidSig = verifyMetaSignature(rawBody, sigHeader, freshCfg.appSecret);
+  // 2. Perform timing-safe binary HMAC verification
+  const isValidSig = verifyMetaSignature(rawBuffer, sigHeader, freshCfg.appSecret);
   if (!isValidSig) {
     console.error("[webhook] Direct signature verification FAILED");
     console.error("[webhook-debug] Received Header:", sigHeader);
-    console.error("[webhook-debug] AppSecret Used:", freshCfg.appSecret ? `${freshCfg.appSecret.substring(0, 8)}...` : "NULL");
+    console.error("[webhook-debug] AppSecret Prefix:", freshCfg.appSecret ? `${freshCfg.appSecret.substring(0, 8)}...` : "NULL");
     return new NextResponse("Invalid signature", { status: 401 });
   }
 
-  // 2. Prepare headers compatible with both Web API Headers and Node Plain Objects
+  // 3. Construct compatible headers for Meta service handler
   const headersObject = Object.fromEntries(request.headers.entries());
   const compatibleHeaders = Object.assign(headersObject, {
     get: (key: string) => request.headers.get(key),
@@ -113,6 +117,7 @@ export async function POST(request: NextRequest) {
     return new NextResponse("Bad request", { status: 400 });
   }
 
+  // 4. Ingest inbound events idempotently
   const accepted: IngestResult[] = [];
   try {
     for (const event of events) accepted.push(await ingestInboundEvent(ownerId, event));
@@ -125,6 +130,7 @@ export async function POST(request: NextRequest) {
   const toEnrich = accepted.filter((r) => r.isNew || r.needsProfile);
   const toProcess = new Set(accepted.filter((r) => r.shouldRunPipeline).map((r) => r.conversationId));
 
+  // 5. Trigger background processing post-response
   if (toEnrich.length > 0 || toProcess.size > 0) {
     after(async () => {
       try {
