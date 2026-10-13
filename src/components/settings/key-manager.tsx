@@ -18,7 +18,7 @@ interface KeyManagerProps {
 export function KeyManager({ keyType, currentKeys, lastFour, keyCount, onSave, onClear, label, description }: KeyManagerProps) {
   const [pending, start] = useTransition();
   const [keyInputs, setKeyInputs] = useState<string[]>(currentKeys.length > 0 ? currentKeys : ["", "", ""]);
-  const [messages, setMessages] = useState<Record<number, { ok: boolean; text: string }>>({});
+  const [messages, setMessages] = useState<Record<number, { ok: boolean; text: string } | null>>({});
 
   const handleSaveKey = (index: number) => {
     const key = keyInputs[index]?.trim();
@@ -91,8 +91,8 @@ export function KeyManager({ keyType, currentKeys, lastFour, keyCount, onSave, o
                 className="w-full rounded border border-zinc-200 bg-white px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               {messages[idx] && (
-                <p className={`mt-1 text-xs ${messages[idx].ok ? "text-emerald-600" : "text-red-600"}`}>
-                  {messages[idx].text}
+                <p className={`mt-1 text-xs ${messages[idx]?.ok ? "text-emerald-600" : "text-red-600"}`}>
+                  {messages[idx]?.text}
                 </p>
               )}
             </div>
