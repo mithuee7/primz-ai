@@ -34,7 +34,7 @@ export function KeyManager({ keyType, currentKeys, lastFour, keyCount, onSave, o
         updated[index] = "";
         setKeyInputs(updated);
         setMessages({ ...messages, [index]: { ok: true, text: "✓ Saved" } });
-        setTimeout(() => setMessages(m => ({ ...m, [index]: undefined })), 3000);
+        setTimeout(() => setMessages(m => ({ ...m, [index]: null })), 3000);
       } else {
         setMessages({ ...messages, [index]: { ok: false, text: res.error || "Failed" } });
       }
