@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound, Plus, Trash2 } from "lucide-react";
+import { KeyRound, Trash2 } from "lucide-react";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/primitives";
 
@@ -17,44 +17,42 @@ interface KeyManagerProps {
 
 export function KeyManager({ keyType, currentKeys, lastFour, keyCount, onSave, onClear, label, description }: KeyManagerProps) {
   const [pending, start] = useTransition();
-  const [keyInputs, setKeyInputs] = useState<string[]>(currentKeys.length > 0 ? currentKeys : ["", "", ""]);
-  const [messages, setMessages] = useState<Record<number, { ok: boolean; text: string } | null>>({});
+  const [keyInput, setKeyInput] = useState("");
+  const [savedCount, setSavedCount] = useState(keyCount);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const handleSaveKey = (index: number) => {
-    const key = keyInputs[index]?.trim();
+  const handleSaveKey = () => {
+    const key = keyInput.trim();
     if (!key || key.length < 20) {
-      setMessages({ ...messages, [index]: { ok: false, text: "Invalid key format" } });
+      setMessage({ ok: false, text: "Invalid key format" });
       return;
     }
 
     start(async () => {
       const res = await onSave(key);
       if (res.ok) {
-        const updated = [...keyInputs];
-        updated[index] = "";
-        setKeyInputs(updated);
-        setMessages({ ...messages, [index]: { ok: true, text: "✓ Saved" } });
-        setTimeout(() => setMessages(m => ({ ...m, [index]: null })), 3000);
+        setKeyInput("");
+        setSavedCount(savedCount + 1);
+        setMessage({ ok: true, text: `✓ Key ${savedCount + 1} saved!` });
+        setTimeout(() => setMessage(null), 2500);
       } else {
-        setMessages({ ...messages, [index]: { ok: false, text: res.error || "Failed" } });
+        setMessage({ ok: false, text: res.error || "Failed to save" });
       }
     });
   };
 
   const handleDeleteAllKeys = () => {
-    if (confirm(`Delete all ${keyType.toUpperCase()} keys? This cannot be undone.`)) {
+    if (confirm(`Delete all ${savedCount} ${keyType.toUpperCase()} keys? This cannot be undone.`)) {
       start(async () => {
         const res = await onClear();
         if (res.ok) {
-          setKeyInputs(["", "", ""]);
-          setMessages({});
+          setKeyInput("");
+          setSavedCount(0);
+          setMessage({ ok: true, text: "All keys deleted" });
+          setTimeout(() => setMessage(null), 2500);
         }
       });
     }
-  };
-
-  const handleAddKeyInput = () => {
-    setKeyInputs([...keyInputs, ""]);
   };
 
   return (
@@ -64,68 +62,53 @@ export function KeyManager({ keyType, currentKeys, lastFour, keyCount, onSave, o
           <h3 className="text-sm font-semibold text-zinc-900">{label}</h3>
           <p className="mt-1 text-xs text-zinc-600">{description}</p>
         </div>
-        {keyCount > 0 && (
+        {savedCount > 0 && (
           <div className="inline-flex items-center gap-2 rounded bg-white px-2 py-1 text-xs text-zinc-600 ml-4">
             <KeyRound className="h-3 w-3" />
-            {keyCount} {keyCount === 1 ? "key" : "keys"}
+            {savedCount} {savedCount === 1 ? "key" : "keys"} saved
           </div>
         )}
       </div>
 
-      <div className="mt-4 space-y-3">
-        {keyInputs.map((key, idx) => (
-          <div key={idx} className="flex gap-2 items-end">
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-zinc-700 mb-1">
-                Key {idx + 1}
-              </label>
-              <input
-                type="password"
-                value={key}
-                onChange={(e) => {
-                  const updated = [...keyInputs];
-                  updated[idx] = e.target.value;
-                  setKeyInputs(updated);
-                }}
-                placeholder={`Paste your ${keyType === "groq" ? "Groq" : "Apify"} API key`}
-                className="w-full rounded border border-zinc-200 bg-white px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              {messages[idx] && (
-                <p className={`mt-1 text-xs ${messages[idx]?.ok ? "text-emerald-600" : "text-red-600"}`}>
-                  {messages[idx]?.text}
-                </p>
-              )}
-            </div>
-            <Button
-              size="sm"
-              disabled={pending || !key || key.length < 20}
-              onClick={() => handleSaveKey(idx)}
-              className="whitespace-nowrap"
-            >
-              <KeyRound className="h-3 w-3" /> Save
-            </Button>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-4 flex gap-2">
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={handleAddKeyInput}
-          className="flex items-center gap-1"
-        >
-          <Plus className="h-3 w-3" /> Add Another
-        </Button>
-        {keyCount > 0 && (
+      <div className="mt-4">
+        <label className="block text-xs font-medium text-zinc-700 mb-1">
+          Key {savedCount + 1}
+        </label>
+        <div className="flex gap-2">
+          <input
+            type="password"
+            value={keyInput}
+            onChange={(e) => setKeyInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && keyInput.length >= 20) handleSaveKey();
+            }}
+            placeholder={`Paste your ${keyType === "groq" ? "Groq" : "Apify"} API key`}
+            className="flex-1 rounded border border-zinc-200 bg-white px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
           <Button
             size="sm"
-            variant="dangerOutline"
-            disabled={pending}
-            onClick={handleDeleteAllKeys}
+            disabled={pending || !keyInput || keyInput.length < 20}
+            onClick={handleSaveKey}
+            className="whitespace-nowrap"
           >
-            <Trash2 className="h-3 w-3" /> Delete All
+            <KeyRound className="h-3 w-3" /> Save
           </Button>
+          {savedCount > 0 && (
+            <Button
+              size="sm"
+              variant="dangerOutline"
+              disabled={pending}
+              onClick={handleDeleteAllKeys}
+              title="Delete all saved keys"
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+        {message && (
+          <p className={`mt-2 text-xs ${message.ok ? "text-emerald-600" : "text-red-600"}`}>
+            {message.text}
+          </p>
         )}
       </div>
     </div>
