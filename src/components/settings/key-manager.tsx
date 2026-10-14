@@ -11,14 +11,16 @@ interface KeyManagerProps {
   keyCount: number;
   onSave: (keys: string) => Promise<{ ok: boolean; error?: string }>;
   onClear: () => Promise<{ ok: boolean; error?: string }>;
+  onCheckBalance?: (key: string) => Promise<{ ok: boolean; data?: { remainingBalance: number; totalBalance: number; usedPercentage: number }; error?: string }>;
   label: string;
   description: string;
 }
 
-export function KeyManager({ keyType, currentKeys, lastFour, keyCount, onSave, onClear, label, description }: KeyManagerProps) {
+export function KeyManager({ keyType, currentKeys, lastFour, keyCount, onSave, onClear, onCheckBalance, label, description }: KeyManagerProps) {
   const [pending, start] = useTransition();
   const [keyInputs, setKeyInputs] = useState<string[]>([""]); // Start with one empty input
   const [messages, setMessages] = useState<Record<number, { ok: boolean; text: string } | null>>({});
+  const [balances, setBalances] = useState<Record<number, { remaining: number; used: number } | null>>({});
 
   const handleSaveKey = (index: number) => {
     const key = keyInputs[index]?.trim();
@@ -52,9 +54,24 @@ export function KeyManager({ keyType, currentKeys, lastFour, keyCount, onSave, o
           const updated = keyInputs.filter((_, i) => i !== index);
           setKeyInputs(updated.length === 0 ? [""] : updated);
           setMessages({});
+          setBalances({});
         }
       });
     }
+  };
+
+  const handleCheckBalance = (index: number) => {
+    const key = keyInputs[index]?.trim();
+    if (!key || key.length < 20 || !onCheckBalance) return;
+
+    start(async () => {
+      const res = await onCheckBalance(key);
+      if (res.ok && res.data) {
+        setBalances({ ...balances, [index]: { remaining: res.data.remainingBalance, used: res.data.usedPercentage } });
+      } else {
+        setBalances({ ...balances, [index]: null });
+      }
+    });
   };
 
   return (
@@ -103,6 +120,17 @@ export function KeyManager({ keyType, currentKeys, lastFour, keyCount, onSave, o
                 >
                   Save
                 </Button>
+                {keyType === "apify" && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={pending || !key || key.length < 20}
+                    onClick={() => handleCheckBalance(idx)}
+                    title="Check remaining balance"
+                  >
+                    Check
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="dangerOutline"
@@ -112,6 +140,19 @@ export function KeyManager({ keyType, currentKeys, lastFour, keyCount, onSave, o
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
+              {balances[idx] && (
+                <div className="mt-2 space-y-1">
+                  <div className="text-xs text-zinc-600">
+                    Remaining: ${balances[idx]?.remaining.toFixed(2)} ({100 - (balances[idx]?.used || 0)}% left)
+                  </div>
+                  <div className="w-full bg-zinc-200 rounded-full h-2 overflow-hidden">
+                    <div
+                      className={`h-full transition-all ${(balances[idx]?.used || 0) > 80 ? "bg-red-500" : (balances[idx]?.used || 0) > 60 ? "bg-amber-500" : "bg-emerald-500"}`}
+                      style={{ width: `${balances[idx]?.used || 0}%` }}
+                    />
+                  </div>
+                </div>
+              )}
               {messages[idx] && (
                 <p className={`mt-1 text-xs ${messages[idx]?.ok ? "text-emerald-600" : "text-red-600"}`}>
                   {messages[idx]?.text}

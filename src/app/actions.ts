@@ -291,6 +291,27 @@ export async function clearApifyKeyAction(): Promise<ActionResult> {
   });
 }
 
+export async function checkApifyBalanceAction(apiKey: string): Promise<ActionResult<{ remainingBalance: number; totalBalance: number; usedPercentage: number }>> {
+  return guarded("checkApifyBalance", async () => {
+    const key = z.string().min(20).parse(apiKey);
+    try {
+      const response = await fetch("https://api.apify.com/v2/users/me", {
+        headers: { Authorization: `Bearer ${key}` },
+      });
+      if (!response.ok) {
+        throw new Error("Invalid Apify API key or unable to fetch balance");
+      }
+      const data = await response.json() as { data: { availableBalance: number; totalBalance: number } };
+      const remaining = data.data.availableBalance || 0;
+      const total = data.data.totalBalance || 100;
+      const used = Math.round(((total - remaining) / total) * 100);
+      return { remainingBalance: remaining, totalBalance: total, usedPercentage: used };
+    } catch (err) {
+      throw new Error(`Failed to check Apify balance: ${errorMessage(err)}`);
+    }
+  });
+}
+
 export async function deleteLeadAction(conversationId: string): Promise<ActionResult> {
   return guarded("deleteLead", async (ownerId) => {
     const id = idSchema.parse(conversationId);

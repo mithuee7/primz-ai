@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import {
   clearGroqKeyAction,
   clearApifyKeyAction,
+  checkApifyBalanceAction,
   connectInstagramAction,
   disconnectInstagramAction,
   refreshInstagramTokenAction,
@@ -97,6 +98,7 @@ export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, day
           keyCount={apify.keyCount || 0}
           onSave={saveApifyKeyAction}
           onClear={clearApifyKeyAction}
+          onCheckBalance={checkApifyBalanceAction}
           label="Apify API Keys"
           description="Fetch Instagram profile info (bio, posts) for automatic lead type detection. Supports multiple keys."
         />
