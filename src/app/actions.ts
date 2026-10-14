@@ -208,11 +208,29 @@ export async function saveSettingsAction(input: unknown): Promise<ActionResult> 
 
 export async function saveGroqKeyAction(key: string): Promise<ActionResult> {
   return guarded("saveGroqKey", async (ownerId) => {
-    const secret = groqKeySchema.parse(key);
-    // For display, show last4 of the first key
-    const firstKey = secret.split(",")[0]!.trim();
-    await getRepository().saveAppSettings(ownerId, {
-      groq_key_encrypted: encryptForStorage(secret),
+    const newKey = groqKeySchema.parse(key);
+    const repo = getRepository();
+    const current = await repo.getAppSettings(ownerId);
+
+    // Get existing keys and append the new one
+    let allKeys = newKey;
+    if (current.groq_key_encrypted) {
+      try {
+        const { decryptFromStorage } = await import("@/lib/secrets");
+        const existing = decryptFromStorage(current.groq_key_encrypted);
+        const existingKeys = existing.split(",").map((k: string) => k.trim()).filter((k: string) => k);
+        const newKeys = newKey.split(",").map((k: string) => k.trim()).filter((k: string) => k);
+        // Combine and deduplicate
+        const combined = [...new Set([...existingKeys, ...newKeys])];
+        allKeys = combined.join(",");
+      } catch {
+        allKeys = newKey;
+      }
+    }
+
+    const firstKey = allKeys.split(",")[0]!.trim();
+    await repo.saveAppSettings(ownerId, {
+      groq_key_encrypted: encryptForStorage(allKeys),
       groq_key_last4: firstKey.slice(-4),
     });
     refreshAll();
@@ -268,16 +286,36 @@ export async function resetDemoAction(): Promise<ActionResult> {
 
 export async function saveApifyKeyAction(key: string): Promise<ActionResult> {
   return guarded("saveApifyKey", async (ownerId) => {
-    const secret = z.string().trim().min(20, "That doesn't look like an Apify key").max(5000).refine(
+    const newKey = z.string().trim().min(20, "That doesn't look like an Apify key").max(5000).refine(
       (val) => {
         const keys = val.split(",").map((k) => k.trim()).filter((k) => k);
         return keys.length > 0 && keys.every((k) => k.length >= 20);
       },
       "Each key must be at least 20 characters. Separate multiple keys with commas."
     ).parse(key);
-    const firstKey = secret.split(",")[0]!.trim();
-    await getRepository().saveAppSettings(ownerId, {
-      apify_key_encrypted: encryptForStorage(secret),
+
+    const repo = getRepository();
+    const current = await repo.getAppSettings(ownerId);
+
+    // Get existing keys and append the new one
+    let allKeys = newKey;
+    if (current.apify_key_encrypted) {
+      try {
+        const { decryptFromStorage } = await import("@/lib/secrets");
+        const existing = decryptFromStorage(current.apify_key_encrypted);
+        const existingKeys = existing.split(",").map((k: string) => k.trim()).filter((k: string) => k);
+        const newKeys = newKey.split(",").map((k: string) => k.trim()).filter((k: string) => k);
+        // Combine and deduplicate
+        const combined = [...new Set([...existingKeys, ...newKeys])];
+        allKeys = combined.join(",");
+      } catch {
+        allKeys = newKey;
+      }
+    }
+
+    const firstKey = allKeys.split(",")[0]!.trim();
+    await repo.saveAppSettings(ownerId, {
+      apify_key_encrypted: encryptForStorage(allKeys),
       apify_key_last4: firstKey.slice(-4),
     });
     refreshAll();
