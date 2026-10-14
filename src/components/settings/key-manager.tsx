@@ -18,7 +18,8 @@ interface KeyManagerProps {
 
 export function KeyManager({ keyType, currentKeys, lastFour, keyCount, onSave, onClear, onCheckBalance, label, description }: KeyManagerProps) {
   const [pending, start] = useTransition();
-  const [keyInputs, setKeyInputs] = useState<string[]>([""]); // Start with one empty input
+  // Initialize with saved keys count + one empty input at the end
+  const [keyInputs, setKeyInputs] = useState<string[]>([...Array(keyCount).fill(""), ""]);
   const [messages, setMessages] = useState<Record<number, { ok: boolean; text: string } | null>>({});
   const [balances, setBalances] = useState<Record<number, { remaining: number; used: number } | null>>({});
 
