@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound, Plus, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/primitives";
 
@@ -58,91 +58,69 @@ export function KeyManager({ keyType, currentKeys, lastFour, keyCount, onSave, o
   };
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-      <div className="flex items-start justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-zinc-900">{label}</h3>
-          <p className="mt-1 text-xs text-zinc-600">{description}</p>
-        </div>
-        {keyCount > 0 && (
-          <div className="inline-flex items-center gap-2 rounded bg-white px-2 py-1 text-xs text-zinc-600 ml-4">
-            <KeyRound className="h-3 w-3" />
-            {keyCount} {keyCount === 1 ? "key" : "keys"}
-          </div>
-        )}
-      </div>
+    <div className="space-y-3">
+      {keyInputs.map((key, idx) => (
+        <div key={idx} className="space-y-1.5">
+          {/* Show saved key as encrypted bullet */}
+          {idx < keyCount && (
+            <div className="flex gap-2 items-center">
+              <code className="flex-1 rounded-xl bg-zinc-50 px-3 py-2 text-xs text-zinc-600 font-mono">
+                •••••••••••••••••••••
+              </code>
+              <Button
+                size="sm"
+                variant="dangerOutline"
+                disabled={pending}
+                onClick={() => handleDeleteKey(idx)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
 
-      <div className="mt-4 space-y-3">
-        {keyInputs.map((key, idx) => (
-          <div key={idx} className="space-y-1">
-            {/* Show saved key as encrypted bullet */}
-            {idx < keyCount && (
-              <div className="flex items-center gap-2">
-                <div className="flex-1 px-3 py-2 rounded border border-zinc-200 bg-white text-xs text-zinc-500 flex items-center gap-2">
-                  <KeyRound className="h-3 w-3" />
-                  •••••••••••••••••••••
-                </div>
+          {/* Input for new or unsaved key */}
+          {idx >= keyCount && (
+            <div>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="password"
+                  value={key}
+                  onChange={(e) => {
+                    const updated = [...keyInputs];
+                    updated[idx] = e.target.value;
+                    setKeyInputs(updated);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && key.length >= 20) handleSaveKey(idx);
+                  }}
+                  placeholder={`Paste your ${keyType === "groq" ? "Groq" : "Apify"} API key`}
+                  className="flex-1 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <Button
+                  size="sm"
+                  disabled={pending || !key || key.length < 20}
+                  onClick={() => handleSaveKey(idx)}
+                >
+                  Save
+                </Button>
                 <Button
                   size="sm"
                   variant="dangerOutline"
                   disabled={pending}
                   onClick={() => handleDeleteKey(idx)}
-                  className="whitespace-nowrap"
                 >
-                  <Trash2 className="h-3 w-3" /> Delete
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
-            )}
-
-            {/* Input for new or unsaved key */}
-            {idx >= keyCount && (
-              <div>
-                <label className="block text-xs font-medium text-zinc-700 mb-1">
-                  Key {idx + 1}
-                </label>
-                <div className="flex gap-2 items-end">
-                  <input
-                    type="password"
-                    value={key}
-                    onChange={(e) => {
-                      const updated = [...keyInputs];
-                      updated[idx] = e.target.value;
-                      setKeyInputs(updated);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && key.length >= 20) handleSaveKey(idx);
-                    }}
-                    placeholder={`Paste your ${keyType === "groq" ? "Groq" : "Apify"} API key`}
-                    className="flex-1 rounded border border-zinc-200 bg-white px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <Button
-                    size="sm"
-                    disabled={pending || !key || key.length < 20}
-                    onClick={() => handleSaveKey(idx)}
-                    className="whitespace-nowrap"
-                  >
-                    <KeyRound className="h-3 w-3" /> Save
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="dangerOutline"
-                    disabled={pending}
-                    onClick={() => handleDeleteKey(idx)}
-                    className="whitespace-nowrap"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
-                {messages[idx] && (
-                  <p className={`mt-1 text-xs ${messages[idx]?.ok ? "text-emerald-600" : "text-red-600"}`}>
-                    {messages[idx]?.text}
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+              {messages[idx] && (
+                <p className={`mt-1 text-xs ${messages[idx]?.ok ? "text-emerald-600" : "text-red-600"}`}>
+                  {messages[idx]?.text}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
