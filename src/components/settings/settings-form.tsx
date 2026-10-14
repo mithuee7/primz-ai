@@ -62,38 +62,17 @@ export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, day
   return (
     <div className="mx-auto grid max-w-3xl gap-4">
       <Section title="Groq" description="Used for both the conversation AI and the output checker. Supports multiple API keys to distribute load and avoid rate limits.">
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-zinc-500">Status:</span>
-          {llm.provider === "groq" ? (
-            <Badge tone="green">
-              <CheckCircle2 className="h-3 w-3" />
-              {llm.source === "settings"
-                ? `${llm.keyCount && llm.keyCount > 1 ? llm.keyCount + " keys" : "Key"} saved in app${settings.groq_key_last4 ? `, ends ${settings.groq_key_last4}` : ""}`
-                : `Key from server env`
-              }
-            </Badge>
-          ) : llm.provider === "demo" ? (
-            <Badge tone="amber">No key. Using the scripted demo AI (not a real model)</Badge>
-          ) : (
-            <Badge tone="red">Not configured. Auto replies will be held for review</Badge>
-          )}
-        </div>
-        <div>
-          <label htmlFor="groq-key" className="label">API key(s)</label>
-          <div className="flex gap-2">
-            <input id="groq-key" type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} placeholder={settings.groq_key_saved ? "Saved. Paste new key(s) to replace it" : "gsk_… or gsk_key1,gsk_key2,gsk_key3"} className="field" />
-            <Button disabled={pending || key.trim().length < 20} onClick={() => start(async () => { const r = await saveGroqKeyAction(key); if (r.ok) setKey(""); report(r, "Key(s) saved (encrypted). They are never shown again."); })}>
-              <KeyRound className="h-4 w-4" /> Save
-            </Button>
-            {settings.groq_key_saved ? (
-              <Button variant="dangerOutline" size="icon" aria-label="Remove saved key" disabled={pending} onClick={() => start(async () => report(await clearGroqKeyAction(), "Saved key(s) removed."))}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            ) : null}
-          </div>
-          <p className="mt-1.5 text-xs text-zinc-500">Paste a single key or multiple comma-separated keys (e.g., <code>key1,key2,key3</code>). The app rotates through them to avoid hitting rate limits. Stored encrypted (AES-256-GCM) on the server. Never sent back to the browser.</p>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <KeyManager
+          keyType="groq"
+          currentKeys={[]}
+          lastFour={settings.groq_key_last4}
+          keyCount={llm.keyCount || 0}
+          onSave={saveGroqKeyAction}
+          onClear={clearGroqKeyAction}
+          label="Groq API Keys"
+          description="Supports multiple keys - each one you add will rotate to avoid rate limits. Stored encrypted, never shown again."
+        />
+        <div className="grid gap-4 sm:grid-cols-2 mt-4">
           <div>
             <label htmlFor="model" className="label">Conversation model</label>
             <input id="model" value={model} onChange={(e) => setModel(e.target.value)} className="field" />
