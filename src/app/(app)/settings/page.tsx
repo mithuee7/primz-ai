@@ -6,6 +6,7 @@ import { getRepository } from "@/lib/repo";
 import { getInstagramService } from "@/lib/services/instagram";
 import { daysLeft } from "@/lib/services/instagram/token";
 import { getLlmStatus } from "@/lib/services/llm/resolve";
+import { decryptFromStorage } from "@/lib/secrets";
 import type { PublicAppSettings } from "@/lib/types";
 
 export const metadata = { title: "Settings" };
@@ -24,12 +25,31 @@ export default async function SettingsPage() {
     meta_app_secret_saved: Boolean(meta_app_secret_encrypted),
   };
 
-  // Count apify keys if they exist
+  // Count groq keys by decrypting and splitting
+  let groqKeyCount = 0;
+  if (groq_key_encrypted) {
+    try {
+      const decrypted = decryptFromStorage(groq_key_encrypted);
+      const keys = decrypted.split(",").map((k: string) => k.trim()).filter((k: string) => k);
+      groqKeyCount = keys.length;
+    } catch {
+      groqKeyCount = 1;
+    }
+  }
+
+  // Count apify keys by decrypting and splitting
   let apifyKeyCount = 0;
   if (apify_key_encrypted) {
-    const decrypted = rest.apify_key_last4; // We can calculate count from encrypted
-    apifyKeyCount = 1;
+    try {
+      const decrypted = decryptFromStorage(apify_key_encrypted);
+      const keys = decrypted.split(",").map((k: string) => k.trim()).filter((k: string) => k);
+      apifyKeyCount = keys.length;
+    } catch {
+      apifyKeyCount = 1;
+    }
   }
+
+  const llmStatus = getLlmStatus(raw);
 
   const ig = await (await getInstagramService(user.id)).getStatus();
   const h = await headers();
@@ -41,7 +61,7 @@ export default async function SettingsPage() {
       <PageHeader title="Settings" />
       <SettingsForm
         settings={settings}
-        llm={getLlmStatus(raw)}
+        llm={{ ...llmStatus, keyCount: groqKeyCount }}
         apify={{ keyCount: apifyKeyCount }}
         instagram={ig}
         callbackUrl={callbackUrl}
