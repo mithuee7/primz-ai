@@ -354,17 +354,9 @@ export async function deleteLeadAction(conversationId: string): Promise<ActionRe
   return guarded("deleteLead", async (ownerId) => {
     const id = idSchema.parse(conversationId);
     const repo = getRepository();
-
-    // Soft delete the conversation (set deleted_at)
     const conv = await repo.getConversation(ownerId, id);
-    if (!conv) throw new Error("Conversation not found");
-
-    // Soft delete the conversation by marking with deleted_at timestamp
-    // The database migration supports soft deletes via deleted_at column
-    // In a real implementation, this would cascade delete related records
-    // For now, we'll rely on the schema to handle cascading deletes
-    console.log(`[delete-lead] Marking conversation ${id} as deleted`);
-    // TODO: Implement proper cascading delete in repository or via database triggers
+    if (!conv) throw new Error("Lead not found");
+    await repo.deleteConversation(ownerId, id);
     refreshAll();
   });
 }

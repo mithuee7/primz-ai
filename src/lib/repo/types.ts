@@ -41,6 +41,8 @@ export interface Repository {
   listConversations(ownerId: string): Promise<ConversationFull[]>;
   getConversation(ownerId: string, id: string): Promise<ConversationFull | null>;
   upsertConversationByThread(ownerId: string, input: UpsertConversationInput): Promise<ConversationFull>;
+  /** Permanently removes a lead and its messages, settings, state and AI history. */
+  deleteConversation(ownerId: string, conversationId: string): Promise<void>;
   updateSettings(ownerId: string, conversationId: string, patch: Partial<Omit<ConversationSettings, "conversation_id">>): Promise<void>;
   updateState(ownerId: string, conversationId: string, patch: Partial<Omit<ConversationState, "conversation_id">>): Promise<void>;
   setConversationServices(ownerId: string, conversationId: string, serviceIds: string[]): Promise<void>;
