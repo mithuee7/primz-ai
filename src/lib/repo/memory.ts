@@ -143,7 +143,7 @@ export class MemoryRepository implements Repository {
       custom_tone: app.default_custom_tone,
       extra_instructions: "",
       all_services: true,
-      auto_chat_enabled: false,
+      auto_chat_enabled: true,
       message_history_fetched: false,
       last_message_history_fetch: null,
       updated_at: t,
@@ -320,6 +320,18 @@ export class MemoryRepository implements Repository {
     };
     s.services.push(svc);
     return { ...svc };
+  }
+
+  async deleteConversation(ownerId: string, conversationId: string) {
+    const s = storeFor(ownerId);
+    s.conversations = s.conversations.filter((c) => c.id !== conversationId);
+    s.settings.delete(conversationId);
+    s.state.delete(conversationId);
+    s.convServices.delete(conversationId);
+    s.messages = s.messages.filter((m) => m.conversation_id !== conversationId);
+    s.generations = s.generations.filter((g) => g.conversation_id !== conversationId);
+    const genIds = new Set(s.generations.map((g) => g.id));
+    s.reviews = s.reviews.filter((r) => genIds.has(r.generation_id));
   }
 
   async deleteService(ownerId: string, id: string) {

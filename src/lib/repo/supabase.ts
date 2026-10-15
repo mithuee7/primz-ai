@@ -152,7 +152,7 @@ export class SupabaseRepository implements Repository {
         await this.db
           .from("conversation_settings")
           .upsert(
-            { conversation_id: id, owner_id: ownerId, tone: app.default_tone, custom_tone: app.default_custom_tone },
+            { conversation_id: id, owner_id: ownerId, tone: app.default_tone, custom_tone: app.default_custom_tone, auto_chat_enabled: true },
             { onConflict: "conversation_id", ignoreDuplicates: true },
           )
           .select(),
@@ -169,6 +169,13 @@ export class SupabaseRepository implements Repository {
     const conv = await this.getConversation(ownerId, id);
     if (!conv) throw new Error("Conversation vanished after upsert");
     return conv;
+  }
+
+  async deleteConversation(ownerId: string, conversationId: string) {
+    must(
+      await this.db.from("conversations").delete().eq("owner_id", ownerId).eq("id", conversationId).select("id"),
+      "deleteConversation",
+    );
   }
 
   async updateSettings(ownerId: string, conversationId: string, patch: Partial<Omit<ConversationSettings, "conversation_id">>) {
