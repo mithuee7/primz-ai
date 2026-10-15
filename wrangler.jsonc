@@ -3,9 +3,15 @@
   "main": ".open-next/worker.js",
   "name": "primz-ai",
   "compatibility_date": "2025-05-05",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
+  },
+  "vars": {
+    "NEXT_PUBLIC_SUPABASE_URL": "https://mhepsqtlyoifiagfyqra.supabase.co",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1oZXBzcXRseW9pZmlhZ2Z5cXJhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyNjAwNzIsImV4cCI6MjEwNjgzNjA3Mn0.V-bQq16SGtZfmxs_jp6HdFMGxcfoL1Hp1iSz5UAKJaE"
   }
 }
