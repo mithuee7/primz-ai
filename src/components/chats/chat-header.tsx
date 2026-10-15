@@ -1,10 +1,10 @@
 "use client";
 
-import { ArrowLeft, Hand, Loader2, SlidersHorizontal, Trash2 } from "lucide-react";
+import { ArrowLeft, Hand, Loader2, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { deleteLeadAction, takeOverAction, toggleAutoChatAction } from "@/app/actions";
+import { takeOverAction, toggleAutoChatAction } from "@/app/actions";
 import { Avatar, Button } from "@/components/ui/primitives";
 import { Switch } from "@/components/ui/switch";
 import type { ConversationFull } from "@/lib/types";
@@ -24,16 +24,6 @@ export function ChatHeader({ conv, onOpenConfig, onNotice }: { conv: Conversatio
       setOptimistic(null);
       if (!res.ok) return onNotice({ kind: "error", text: res.error });
       if (res.data) onNotice({ kind: res.data.status === "SENT" ? "ok" : "warn", text: res.data.message });
-      router.refresh();
-    });
-  };
-
-  const deleteLead = () => {
-    if (!window.confirm(`Delete ${conv.lead_name} permanently? Their messages, settings and AI history are removed. This cannot be undone.`)) return;
-    start(async () => {
-      const res = await deleteLeadAction(conv.id);
-      if (!res.ok) return onNotice({ kind: "error", text: res.error });
-      router.push("/chats");
       router.refresh();
     });
   };
@@ -69,9 +59,6 @@ export function ChatHeader({ conv, onOpenConfig, onNotice }: { conv: Conversatio
         </div>
         <Button variant="secondary" size="icon" onClick={onOpenConfig} aria-label="Configure AI for this lead" title="Configure">
           <SlidersHorizontal className="h-4 w-4" />
-        </Button>
-        <Button variant="danger" size="icon" onClick={deleteLead} disabled={pending} aria-label="Delete this lead" title="Delete lead">
-          <Trash2 className="h-4 w-4" />
         </Button>
       </div>
 
