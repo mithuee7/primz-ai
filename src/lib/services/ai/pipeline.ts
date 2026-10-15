@@ -640,6 +640,9 @@ function deterministicGuard(args: {
   if (newlyPitching && (allowed.length === 0 || !update.potential_service_id)) {
     add("PREMATURE_PITCH", "The AI tried to pitch without a valid selected service.");
   }
+  if (newlyPitching && isNoInterestReply(lastLead)) {
+    add("PREMATURE_PITCH", `The lead replied "${lastLead.trim()}", which is not interest. Don't pitch a call after that.`);
+  }
 
   // Variants of one offering share a base name ("AI Receptionist (Real Estate)" / "(Clinics)").
   // A mention that matches an allowed service's base name is not treated as a non-selected service.
@@ -658,6 +661,12 @@ function deterministicGuard(args: {
   if (rules.reason) reasons.push(rules.reason);
 
   return { ok: issues.size === 0, issues: [...issues], reason: reasons.join(" ") };
+}
+
+/** A bare "no", "ok", "maybe" and similar carries no interest, so a pitch after it is never allowed. */
+const NO_INTEREST = /^\s*(no|nah|nope|no thanks|no thank you|not really|not interested|not now|later|stop|ok|okay|k|maybe|hmm+|idk|i don'?t know)\W*$/i;
+export function isNoInterestReply(text: string): boolean {
+  return NO_INTEREST.test(text);
 }
 
 /** Apply the model's state update; pitch status never regresses once PITCHED. */
