@@ -2,7 +2,7 @@ import "server-only";
 import { getEnv } from "@/lib/env";
 import { getRepository } from "@/lib/repo";
 import type { CheckerIssue, GenerationOutput } from "@/lib/schemas";
-import { logActivity } from "@/lib/services/activity-log";
+import { logActivity, type ActivityLevel } from "@/lib/services/activity-log";
 import { getInstagramService, InstagramApiError, InstagramNotConfiguredError } from "@/lib/services/instagram";
 import { LLMError } from "@/lib/services/llm/types";
 import { resolveLLM } from "@/lib/services/llm/resolve";
@@ -65,6 +65,15 @@ interface RunTrace {
  *    so webhook retries, double clicks, restarts and multiple servers can't produce a second reply.
  *  - A send whose outcome is unclear is never retried automatically; the chat is flagged instead.
  */
+function classifyAiError(err: unknown, prefix: "ai" | "checker"): { code: string; level: ActivityLevel } {
+  if (err instanceof MalformedOutputError) return { code: `${prefix}_malformed_output`, level: "error" };
+  if (err instanceof LLMError) {
+    if (err.kind === "rate_limit") return { code: `${prefix}_rate_limit`, level: "warn" };
+    return { code: `${prefix}_llm_${err.kind}`, level: "error" };
+  }
+  return { code: `${prefix}_error`, level: "error" };
+}
+
 interface LogContext {
   lead_username: string;
   lead_name: string;
@@ -150,7 +159,19 @@ async function runOnce(opts: PipelineOptions): Promise<{ outcome: PipelineOutcom
 
     // Exactly-once gate: claim THIS inbound message before any AI work or sending.
     const claim = await repo.claimReply(ownerId, conversationId, lastMessage.id, opts.manual ? MANUAL_RECLAIMABLE : AUTO_RECLAIMABLE);
-    if (!claim.claimed) return skip(claimSkipReason(claim.existing?.status));
+    if (!claim.claimed) {
+      const existing = claim.existing;
+      const reason = claimSkipReason(existing?.status);
+      // A message that needs a person must be on Needs Review, not only in the logs.
+      if (existing && (existing.status === "FAILED" || existing.status === "REVIEW" || existing.status === "UNKNOWN") && !conv.state.needs_review) {
+        try {
+          await repo.updateState(ownerId, conversationId, { needs_review: true, review_reason: reason, pending_generation_id: existing.generation_id });
+        } catch {
+          // flag is best-effort; the skip is still logged
+        }
+      }
+      return skip(reason);
+    }
 
     const trace: RunTrace = { generationId: null, sendStarted: false, sentOk: false, delivery: "instagram", sendAmbiguous: false, aborted: false, rerun: false };
     let outcome: PipelineOutcome;
@@ -175,6 +196,7 @@ async function runOnce(opts: PipelineOptions): Promise<{ outcome: PipelineOutcom
   } catch (err) {
     // Failed before a claim existed (DB down, etc.): nothing was sent. Best-effort flag.
     console.error("[pipeline] failed before claim, nothing sent:", errText(err));
+    await logActivity({ ownerId, conversationId, level: "error", step: "internal", message: `Could not start the reply: ${errText(err)}`, details: { code: "db_or_setup_error" } });
     try {
       await repo.updateState(ownerId, conversationId, { needs_review: true, review_reason: `Processing failed: ${errText(err)}` });
     } catch {
@@ -241,6 +263,7 @@ async function settleClaim(ownerId: string, triggerMessageId: string, outcome: P
 /** An exception after the claim. The question that matters: did a reply possibly go out? */
 async function handleUnexpected(err: unknown, ownerId: string, conv: ConversationFull, trace: RunTrace): Promise<PipelineOutcome> {
   console.error("[pipeline] unexpected error:", errText(err));
+  await logActivity({ ownerId, conversationId: conv.id, level: trace.sentOk ? "warn" : "error", step: "internal", message: `Unexpected error: ${errText(err)}`, details: { ...contextFrom(conv, null), code: "internal_error", sent_ok: trace.sentOk } });
   if (trace.sentOk) {
     // Reply is out; only our bookkeeping failed. Don't flag it or send anything else.
     return { status: "SENT", generationId: trace.generationId ?? "", messageId: "", delivery: trace.delivery };
@@ -302,6 +325,15 @@ async function processClaimed(args: {
   } catch (err) {
     const raw = err instanceof MalformedOutputError ? err.raw : null;
     const errMsg = errText(err);
+    const classified = classifyAiError(err, "ai");
+    await logActivity({
+      ownerId,
+      conversationId,
+      level: classified.level,
+      step: "draft",
+      message: `AI could not write a reply for @${conv.lead_username}: ${errMsg}`,
+      details: { ...contextFrom(conv, lastMessage), code: classified.code, raw_output: raw ? raw.slice(0, 500) : null },
+    });
 
     // If it's a rate limit, schedule a retry instead of flagging
     if (err instanceof LLMError && err.kind === "rate_limit") {
@@ -349,6 +381,7 @@ async function processClaimed(args: {
   // 7b. Deterministic guards before spending a checker call
   const guard = deterministicGuard({ output, conv, messages, allowed, allServices });
   if (!guard.ok) {
+    await logActivity({ ownerId, conversationId: conv.id, level: "warn", step: "guard", message: `Draft blocked by safety rules: ${guard.reason}`, details: { ...contextFrom(conv, lastMessage), code: "guard_rejected", issues: guard.issues } });
     await repo.addReview(ownerId, { generation_id: gen.id, reviewer: "rules", approved: false, confidence: 1, issues: guard.issues, reason: guard.reason });
     return await flag(ownerId, conv, gen.id, guard.reason, guard.issues);
   }
@@ -396,6 +429,8 @@ async function processClaimed(args: {
       await repo.setClaimStatus(ownerId, lastMessage.id, "RATE_LIMITED", gen.id);
       return { status: "ERROR_NOT_SENT", reason: `Checker rate limited. Will retry automatically in 5-10 minutes: ${errText(err)}` };
     }
+    const classified = classifyAiError(err, "checker");
+    await logActivity({ ownerId, conversationId: conv.id, level: classified.level, step: "checker", message: `Checker could not run for @${conv.lead_username}: ${errText(err)}`, details: { ...contextFrom(conv, lastMessage), code: classified.code } });
     // Other errors: flag for review
     await repo.addReview(ownerId, { generation_id: gen.id, reviewer: "ai", approved: false, confidence: 0, issues: ["CHECKER_FAILURE"], reason: `Checker error: ${errText(err)}` });
     return await flag(ownerId, conv, gen.id, `Checker failed: ${errText(err)}`, ["CHECKER_FAILURE"]);
@@ -471,6 +506,14 @@ async function processClaimed(args: {
     const definitelyNotSent = err instanceof InstagramNotConfiguredError || (err instanceof InstagramApiError && !err.retryable);
     trace.sendAmbiguous = !definitelyNotSent;
     await repo.updateGeneration(ownerId, gen.id, { error: `Send failed: ${errText(err)}` });
+    const sendCode = err instanceof InstagramNotConfiguredError
+      ? "instagram_not_configured"
+      : /190|expired|OAuth/i.test(errText(err))
+        ? "instagram_token_expired"
+        : definitelyNotSent
+          ? "instagram_rejected"
+          : "instagram_unconfirmed";
+    await logActivity({ ownerId, conversationId: conv.id, level: "error", step: "send", message: `Could not send to @${conv.lead_username}: ${errText(err)}`, details: { ...contextFrom(conv, lastMessage), code: sendCode, generation_id: gen.id, may_have_been_delivered: !definitelyNotSent } });
     const reason = definitelyNotSent
       ? `Instagram didn't accept the message: ${errText(err)}`
       : `Instagram didn't confirm the send (${errText(err)}). It may or may not have been delivered. Check the chat on Instagram before sending anything.`;

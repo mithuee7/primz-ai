@@ -3,6 +3,7 @@ import { getRepository } from "@/lib/repo";
 import { rateLimit } from "@/lib/rate-limit";
 import { runPipeline } from "@/lib/services/ai/pipeline";
 import { sweepStaleReplyClaims } from "@/lib/services/ai/claims";
+import { logActivity } from "@/lib/services/activity-log";
 import { enrichConversation, ingestInboundEvent, type IngestResult } from "@/lib/services/ingest";
 import { InstagramNotConfiguredError, WebhookValidationError } from "@/lib/services/instagram";
 import { MetaInstagramService, extractEntryIds } from "@/lib/services/instagram/meta";
@@ -69,6 +70,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     if (err instanceof WebhookValidationError) {
       console.error("[webhook] signature verification FAILED:", err.message);
+      await logActivity({ ownerId, level: "error", step: "webhook", message: "Rejected an Instagram webhook: signature check failed. Check the app secret in Settings.", details: { code: "invalid_signature" } });
       return new NextResponse("Invalid signature", { status: 401 });
     }
     if (err instanceof InstagramNotConfiguredError) return new NextResponse("Instagram integration not configured", { status: 503 });

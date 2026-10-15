@@ -1,5 +1,6 @@
 import "server-only";
 import { getRepository } from "@/lib/repo";
+import { logActivity } from "@/lib/services/activity-log";
 import type { InboundEvent, InstagramService } from "@/lib/services/instagram";
 
 export interface IngestResult {
@@ -46,6 +47,16 @@ export async function ingestInboundEvent(ownerId: string, event: InboundEvent): 
   });
 
   conv = (await repo.getConversation(ownerId, conv.id)) ?? conv;
+  if (created && fromLead) {
+    await logActivity({
+      ownerId,
+      conversationId: conv.id,
+      level: "info",
+      step: "inbound",
+      message: `Message received from @${conv.lead_username}.`,
+      details: { lead_username: conv.lead_username, lead_name: conv.lead_name, incoming_message: event.message.text, incoming_at: event.message.timestamp, auto_chat: conv.settings.auto_chat_enabled, code: "inbound" },
+    });
+  }
   return {
     conversationId: conv.id,
     duplicate: !created,

@@ -1,40 +1,35 @@
 "use client";
 
-import { RotateCw } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { runAiNowAction } from "@/app/actions";
-import { Badge, Button } from "@/components/ui/primitives";
 import type { ActivityEntry, ActivityLevel } from "@/lib/services/activity-log";
 
-const LEVEL_TONE: Record<ActivityLevel, "green" | "amber" | "red" | "neutral"> = {
-  success: "green",
-  info: "neutral",
-  warn: "amber",
-  error: "red",
+const LEVEL_LABEL: Record<ActivityLevel, string> = {
+  error: "ERROR",
+  warn: "WARN ",
+  info: "INFO ",
+  success: "OK   ",
 };
 
-const FIELD_LABELS: Record<string, string> = {
-  lead_username: "To",
-  lead_name: "Lead name",
-  incoming_message: "Lead said",
-  incoming_at: "Lead sent at",
-  reply: "Reply",
-  model: "Model",
-  stage: "Stage",
-  pitch_status: "Pitch",
-  delivery: "Delivery",
-  generation_id: "Generation ID",
-  checker_confidence: "Checker confidence",
-  confidence: "Checker confidence",
-  issues: "Issues",
-  reason: "Checker reason",
+const LEVEL_CLASS: Record<ActivityLevel, string> = {
+  error: "text-red-400",
+  warn: "text-amber-300",
+  info: "text-sky-300",
+  success: "text-emerald-400",
 };
 
-const QUOTED = new Set(["incoming_message", "reply"]);
+type Filter = "all" | "problems" | "sent" | "info";
 
-/** 12-hour clock in the viewer's own timezone, e.g. "Oct 15, 6:29:05 PM". */
+const FILTERS: { id: Filter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "problems", label: "Errors & warnings" },
+  { id: "sent", label: "Sent" },
+  { id: "info", label: "Info" },
+];
+
+/** 12-hour clock in the viewer's timezone, e.g. "Oct 15 6:33:35 PM". */
 export function formatLogTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
     month: "short",
@@ -46,29 +41,37 @@ export function formatLogTime(iso: string): string {
   });
 }
 
-function displayValue(key: string, value: unknown): string {
-  if (Array.isArray(value)) return value.length ? value.join(", ") : "none";
-  if (key === "lead_username" && typeof value === "string") return `@${value}`;
-  if (key === "incoming_at" || key === "created_at") return typeof value === "string" ? formatLogTime(value) : String(value);
-  if ((key === "confidence" || key === "checker_confidence") && typeof value === "number") return value.toFixed(2);
-  return String(value);
+function matches(entry: ActivityEntry, filter: Filter): boolean {
+  if (filter === "all") return true;
+  if (filter === "problems") return entry.level === "error" || entry.level === "warn";
+  if (filter === "sent") return entry.level === "success";
+  return entry.level === "info";
 }
 
-export function LogRow({ entry }: { entry: ActivityEntry }) {
+/** Renders details as logfmt-style key=value pairs, one per line. */
+function detailLines(details: Record<string, unknown>): string[] {
+  return Object.entries(details)
+    .filter(([, v]) => v !== null && v !== undefined && v !== "")
+    .map(([k, v]) => `${k}=${JSON.stringify(v)}`);
+}
+
+function LogLine({ entry }: { entry: ActivityEntry }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   const details = entry.details ?? {};
-  const fields = Object.entries(details).filter(([k, v]) => FIELD_LABELS[k] && v !== null && v !== undefined && v !== "");
+  const code = typeof details.code === "string" ? details.code : null;
+  const lines = detailLines(details);
   const canRetry = Boolean(entry.conversation_id);
+  const leadTag = typeof details.lead_username === "string" ? `@${details.lead_username}` : null;
 
   const retry = () => {
     if (!entry.conversation_id) return;
     start(async () => {
       const res = await runAiNowAction(entry.conversation_id as string);
       if (res.ok) {
-        setResult({ ok: res.data?.status !== "ERROR_NOT_SENT" && res.data?.status !== "NEEDS_REVIEW", text: res.data?.message ?? "Retry finished." });
+        setResult({ ok: res.data?.status === "SENT" || res.data?.status === "SKIPPED", text: res.data?.message ?? "Retry finished." });
       } else {
         setResult({ ok: false, text: res.error });
       }
@@ -77,48 +80,76 @@ export function LogRow({ entry }: { entry: ActivityEntry }) {
   };
 
   return (
-    <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-start sm:gap-3">
-      <div className="flex shrink-0 flex-col gap-1 sm:w-44">
-        <Badge tone={LEVEL_TONE[entry.level]} className="w-fit">{entry.level}</Badge>
-        <time dateTime={entry.created_at} suppressHydrationWarning className="text-[11px] text-zinc-500">
-          {formatLogTime(entry.created_at)}
-        </time>
-      </div>
-
-      <div className="min-w-0 flex-1 space-y-2">
-        <p className="break-words text-sm text-zinc-900">
-          <span className="mr-1.5 font-mono text-[11px] text-zinc-500">[{entry.step}]</span>
-          {entry.message}
-        </p>
-
-        {fields.length > 0 ? (
-          <dl className="grid gap-x-3 gap-y-1.5 rounded-lg bg-zinc-50 p-2.5 text-xs sm:grid-cols-[9rem_1fr]">
-            {fields.map(([k, v]) => (
-              <div key={k} className="contents">
-                <dt className="text-zinc-500">{FIELD_LABELS[k]}</dt>
-                <dd className={`min-w-0 break-words text-zinc-800 ${QUOTED.has(k) ? "whitespace-pre-wrap rounded-md border border-zinc-200 bg-white p-2" : ""}`}>
-                  {displayValue(k, v)}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        ) : null}
-
-        <div className="flex flex-wrap items-center gap-3">
+    <div className="border-b border-zinc-800/70 px-3 py-2 last:border-b-0 hover:bg-white/[0.02]">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="text-zinc-500">{formatLogTime(entry.created_at)}</span>
+        <span className={`font-bold ${LEVEL_CLASS[entry.level]}`}>{LEVEL_LABEL[entry.level]}</span>
+        <span className="text-zinc-500">[{entry.step}]</span>
+        {code ? <span className="rounded bg-zinc-800 px-1.5 text-[11px] text-amber-200">{code}</span> : null}
+        {leadTag ? <span className="text-violet-300">{leadTag}</span> : null}
+        <span className="min-w-0 flex-1 break-words text-zinc-100">{entry.message}</span>
+        <span className="flex items-center gap-2">
           {entry.conversation_id ? (
-            <Link href={`/chats/${entry.conversation_id}`} className="text-xs text-blue-600 hover:underline">
-              Open chat
+            <Link href={`/chats/${entry.conversation_id}`} className="text-[11px] text-sky-400 hover:underline">
+              chat
             </Link>
           ) : null}
           {canRetry ? (
-            <Button size="sm" variant="secondary" disabled={pending} onClick={retry}>
-              <RotateCw className={`h-3.5 w-3.5 ${pending ? "animate-spin" : ""}`} /> {pending ? "Retrying…" : "Retry"}
-            </Button>
+            <button
+              type="button"
+              onClick={retry}
+              disabled={pending}
+              className="rounded border border-zinc-600 px-1.5 py-0.5 text-[11px] text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+            >
+              {pending ? "retrying…" : "retry"}
+            </button>
           ) : null}
-        </div>
-        {result ? (
-          <p role="status" className={`text-xs ${result.ok ? "text-emerald-700" : "text-red-700"}`}>{result.text}</p>
-        ) : null}
+        </span>
+      </div>
+
+      {lines.length > 0 ? (
+        <details className="mt-1 pl-[1.5rem] text-[11px] text-zinc-500">
+          <summary className="cursor-pointer select-none hover:text-zinc-300">details ({lines.length})</summary>
+          <pre className="mt-1 whitespace-pre-wrap break-all rounded bg-black/40 p-2 text-zinc-400">{lines.join("\n")}</pre>
+        </details>
+      ) : null}
+
+      {result ? (
+        <p role="status" className={`mt-1 pl-[1.5rem] text-[11px] ${result.ok ? "text-emerald-400" : "text-red-400"}`}>
+          {result.ok ? "ok" : "failed"}: {result.text}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+export function LogViewer({ entries }: { entries: ActivityEntry[] }) {
+  const [filter, setFilter] = useState<Filter>("all");
+  const visible = useMemo(() => entries.filter((e) => matches(e, filter)), [entries, filter]);
+
+  return (
+    <div className="mx-auto max-w-5xl">
+      <div className="mb-2 flex flex-wrap gap-1.5">
+        {FILTERS.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            aria-pressed={filter === f.id}
+            onClick={() => setFilter(f.id)}
+            className={`rounded-full px-3 py-1 text-xs font-medium ${filter === f.id ? "bg-zinc-900 text-white" : "bg-white text-zinc-600 ring-1 ring-zinc-200 hover:bg-zinc-50"}`}
+          >
+            {f.label}
+          </button>
+        ))}
+        <span className="ml-auto self-center text-xs text-zinc-500">{visible.length} of {entries.length} lines</span>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl bg-zinc-950 font-mono text-[12px] leading-relaxed shadow-sm">
+        {visible.length === 0 ? (
+          <p className="p-4 text-zinc-500">No lines match this filter.</p>
+        ) : (
+          visible.map((e) => <LogLine key={e.id} entry={e} />)
+        )}
       </div>
     </div>
   );
