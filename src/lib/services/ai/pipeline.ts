@@ -65,19 +65,50 @@ interface RunTrace {
  *    so webhook retries, double clicks, restarts and multiple servers can't produce a second reply.
  *  - A send whose outcome is unclear is never retried automatically; the chat is flagged instead.
  */
-async function logOutcome(ownerId: string, conversationId: string, outcome: PipelineOutcome): Promise<void> {
+interface LogContext {
+  lead_username: string;
+  lead_name: string;
+  incoming_message: string | null;
+  incoming_at: string | null;
+}
+
+function contextFrom(conv: ConversationFull, lastLead: Message | null): LogContext {
+  return {
+    lead_username: conv.lead_username || conv.lead_name || "unknown",
+    lead_name: conv.lead_name,
+    incoming_message: lastLead ? lastLead.content : null,
+    incoming_at: lastLead ? lastLead.created_at : null,
+  };
+}
+
+/** Best-effort lookup of who the lead is and what they last said. Never throws. */
+async function loadLogContext(ownerId: string, conversationId: string): Promise<LogContext | null> {
+  try {
+    const repo = getRepository();
+    const conv = await repo.getConversation(ownerId, conversationId);
+    if (!conv) return null;
+    const recent = await repo.listRecentMessages(ownerId, conversationId, 10);
+    const lastLead = [...recent].reverse().find((m) => m.sender_type === "lead") ?? null;
+    return contextFrom(conv, lastLead);
+  } catch {
+    return null;
+  }
+}
+
+async function logOutcome(ownerId: string, conversationId: string, outcome: PipelineOutcome, ctx: LogContext | null): Promise<void> {
+  const base = { ownerId, conversationId, details: ctx ? { ...ctx } : null };
   switch (outcome.status) {
     case "SENT":
-      await logActivity({ ownerId, conversationId, level: "success", step: "send", message: "Reply sent to the lead.", details: { delivery: outcome.delivery, generationId: outcome.generationId || null } });
+      // The send itself is logged in processClaimed, where the reply text is known.
       return;
     case "SKIPPED":
-      await logActivity({ ownerId, conversationId, level: "info", step: "skip", message: `No reply: ${outcome.reason}.` });
+      await logActivity({ ...base, level: "info", step: "skip", message: `No reply to @${ctx?.lead_username ?? "lead"}: ${outcome.reason}.` });
       return;
     case "NEEDS_REVIEW":
-      await logActivity({ ownerId, conversationId, level: "warn", step: "review", message: `Held for your review: ${outcome.reason}`, details: { issues: outcome.issues, generationId: outcome.generationId } });
+      await logActivity({ ...base, level: "warn", step: "review", message: `Held for your review (@${ctx?.lead_username ?? "lead"}): ${outcome.reason}`, details: { ...(base.details ?? {}), issues: outcome.issues, generation_id: outcome.generationId } });
       return;
     case "ERROR_NOT_SENT":
-      await logActivity({ ownerId, conversationId, level: "error", step: "error", message: `Reply failed, nothing sent: ${outcome.reason}` });
+      await logActivity({ ...base, level: "error", step: "error", message: `Failed, nothing sent to @${ctx?.lead_username ?? "lead"}: ${outcome.reason}` });
       return;
   }
 }
@@ -88,7 +119,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcom
 
   for (;;) {
     const { outcome, followUp } = await runOnce(current);
-    await logOutcome(current.ownerId, current.conversationId, outcome);
+    await logOutcome(current.ownerId, current.conversationId, outcome, await loadLogContext(current.ownerId, current.conversationId));
     if (best === null || outcome.status !== "SKIPPED") best = outcome;
     if (!followUp) return best;
     current = followUp;
@@ -302,7 +333,8 @@ async function processClaimed(args: {
 
   // 7. Validate schema (done by the engine) + record the raw generation for audit
   const { output } = generated;
-  await logActivity({ ownerId, conversationId: conv.id, level: "info", step: "draft", message: `Drafted a reply (stage ${output.state_update.conversation_stage}, pitch ${output.state_update.pitch_status}).`, details: { model: generated.model, reply: output.reply } });
+  const logCtx = contextFrom(conv, lastMessage);
+  await logActivity({ ownerId, conversationId: conv.id, level: "info", step: "draft", message: `Drafted a reply to @${logCtx.lead_username} (stage ${output.state_update.conversation_stage}, pitch ${output.state_update.pitch_status}).`, details: { ...logCtx, reply: output.reply, model: generated.model, stage: output.state_update.conversation_stage, pitch_status: output.state_update.pitch_status } });
   const gen = await repo.createGeneration(ownerId, {
     conversation_id: conversationId,
     generated_text: output.reply,
@@ -383,8 +415,8 @@ async function processClaimed(args: {
     conversationId: conv.id,
     level: check.approved ? "info" : "warn",
     step: "checker",
-    message: check.approved ? `Checker approved the draft (confidence ${check.confidence.toFixed(2)}).` : `Checker rejected the draft: ${check.reason || "no reason given"}`,
-    details: { issues: check.issues, confidence: check.confidence },
+    message: check.approved ? `Checker approved the draft for @${logCtx.lead_username} (confidence ${check.confidence.toFixed(2)}).` : `Checker rejected the draft for @${logCtx.lead_username}: ${check.reason || "no reason given"}`,
+    details: { ...logCtx, issues: check.issues, confidence: check.confidence, reason: check.reason || null },
   });
 
   // 9. Rejected: DO NOT SEND
@@ -446,6 +478,14 @@ async function processClaimed(args: {
   }
   trace.sentOk = true;
   trace.delivery = sent.delivery;
+  await logActivity({
+    ownerId,
+    conversationId: conv.id,
+    level: "success",
+    step: "send",
+    message: `Reply sent to @${logCtx.lead_username}.`,
+    details: { ...logCtx, reply: finalText, delivery: sent.delivery, generation_id: gen.id, checker_confidence: check.confidence },
+  });
 
   // 14-15. Save message + update state. The reply is already out, so failures here are only logged.
   let messageId = "";
