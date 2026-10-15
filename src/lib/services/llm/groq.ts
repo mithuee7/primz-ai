@@ -73,7 +73,14 @@ export class GroqClient implements LLMClient {
     } catch {
       throw new LLMError("Groq returned a non-JSON response", "http", false);
     }
-    if (!res.ok) throw new LLMError(`Groq error ${res.status}: ${body.error?.message ?? "unknown"}`, "http", false);
+    if (!res.ok) {
+      const msg = body.error?.message ?? "unknown";
+      // Groq rejects a completion that isn't valid JSON (json_validate_failed). Another key or a fresh attempt can succeed.
+      if (res.status === 400 && /Failed to generate JSON|json_validate_failed/i.test(msg)) {
+        throw new LLMError(`Groq could not produce valid JSON for this reply (${msg})`, "http", true);
+      }
+      throw new LLMError(`Groq error ${res.status}: ${msg}`, "http", false);
+    }
 
     const choice = body.choices?.[0];
     const content = choice?.message?.content;
