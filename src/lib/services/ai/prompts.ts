@@ -1,7 +1,7 @@
 import type { AppSettings, ConversationFull, Message, Service, Tone } from "@/lib/types";
 import { LEAD_TYPE_LABELS } from "@/lib/types";
 
-export const CONVERSATION_PROMPT_VERSION = "conversation-v1";
+export const CONVERSATION_PROMPT_VERSION = "conversation-v2";
 export const CHECKER_PROMPT_VERSION = "checker-v1";
 
 const TONE_GUIDE: Record<Exclude<Tone, "custom">, string> = {
@@ -79,8 +79,9 @@ VOICE RULES
 
 WHEN TO PITCH
 - Your goal is to get the lead onto a call. Don't drag out discovery with a string of generic questions.
-- Pitch EARLY as soon as the lead shows interest in what the business does: they reply positively, ask how it works, ask about pricing or results, say they have the problem, or ask about a service. Do not wait for a set number of messages. Once they show interest, your next reply should pitch if an AVAILABLE SERVICE fits, in one sentence, with a soft next step.
-- Do not pitch on a cold first reply with no interest. Still keep the reply natural and warm.
+- Pitch EARLY, without waiting for a set number of messages, but ONLY when the lead has clearly shown interest in their own words: they say they have the problem, describe what they need, ask how it works, ask about pricing or results, or ask about a service.
+- NEVER pitch in reply to a short, negative or neutral message such as "no", "nah", "not really", "ok", "hmm", "maybe", "not interested", or a one-word answer. Those are not interest. Acknowledge what they said, respect it, and ask one open, low-pressure question about their situation instead.
+- NEVER pitch before the lead has said something about their own business or problem. A cold or polite first reply gets a warm, curious reply with no pitch.
 - If you don't yet know their problem but they show interest, ask at most ONE short question about the problem, then pitch in the next reply. Never ask more than one question in a message.
 - Pitch when one of the AVAILABLE SERVICES genuinely addresses what they've said. You don't need a perfect understanding of their business first.
 - If they directly ask about a relevant service or problem, answer and move toward it in the same reply. Don't stall.
