@@ -64,5 +64,7 @@ export function isSupabaseConfigured(): boolean {
  * is not configured.
  */
 export function isDemoMode(): boolean {
-  return getEnv().DEMO_MODE === "true" || !isSupabaseConfigured();
+  // Demo mode only exists for the test suite. The deployed app always uses Supabase,
+  // so missing Supabase config fails loudly instead of silently running a fake app.
+  return process.env.NODE_ENV === "test" && getEnv().DEMO_MODE === "true";
 }
