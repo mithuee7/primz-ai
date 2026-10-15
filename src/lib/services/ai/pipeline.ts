@@ -2,6 +2,7 @@ import "server-only";
 import { getEnv } from "@/lib/env";
 import { getRepository } from "@/lib/repo";
 import type { CheckerIssue, GenerationOutput } from "@/lib/schemas";
+import { logActivity } from "@/lib/services/activity-log";
 import { getInstagramService, InstagramApiError, InstagramNotConfiguredError } from "@/lib/services/instagram";
 import { LLMError } from "@/lib/services/llm/types";
 import { resolveLLM } from "@/lib/services/llm/resolve";
@@ -64,12 +65,30 @@ interface RunTrace {
  *    so webhook retries, double clicks, restarts and multiple servers can't produce a second reply.
  *  - A send whose outcome is unclear is never retried automatically; the chat is flagged instead.
  */
+async function logOutcome(ownerId: string, conversationId: string, outcome: PipelineOutcome): Promise<void> {
+  switch (outcome.status) {
+    case "SENT":
+      await logActivity({ ownerId, conversationId, level: "success", step: "send", message: "Reply sent to the lead.", details: { delivery: outcome.delivery, generationId: outcome.generationId || null } });
+      return;
+    case "SKIPPED":
+      await logActivity({ ownerId, conversationId, level: "info", step: "skip", message: `No reply: ${outcome.reason}.` });
+      return;
+    case "NEEDS_REVIEW":
+      await logActivity({ ownerId, conversationId, level: "warn", step: "review", message: `Held for your review: ${outcome.reason}`, details: { issues: outcome.issues, generationId: outcome.generationId } });
+      return;
+    case "ERROR_NOT_SENT":
+      await logActivity({ ownerId, conversationId, level: "error", step: "error", message: `Reply failed, nothing sent: ${outcome.reason}` });
+      return;
+  }
+}
+
 export async function runPipeline(opts: PipelineOptions): Promise<PipelineOutcome> {
   let current = opts;
   let best: PipelineOutcome | null = null;
 
   for (;;) {
     const { outcome, followUp } = await runOnce(current);
+    await logOutcome(current.ownerId, current.conversationId, outcome);
     if (best === null || outcome.status !== "SKIPPED") best = outcome;
     if (!followUp) return best;
     current = followUp;
@@ -283,6 +302,7 @@ async function processClaimed(args: {
 
   // 7. Validate schema (done by the engine) + record the raw generation for audit
   const { output } = generated;
+  await logActivity({ ownerId, conversationId: conv.id, level: "info", step: "draft", message: `Drafted a reply (stage ${output.state_update.conversation_stage}, pitch ${output.state_update.pitch_status}).`, details: { model: generated.model, reply: output.reply } });
   const gen = await repo.createGeneration(ownerId, {
     conversation_id: conversationId,
     generated_text: output.reply,
@@ -356,6 +376,15 @@ async function processClaimed(args: {
     confidence: check.confidence,
     issues: check.issues,
     reason: check.reason,
+  });
+
+  await logActivity({
+    ownerId,
+    conversationId: conv.id,
+    level: check.approved ? "info" : "warn",
+    step: "checker",
+    message: check.approved ? `Checker approved the draft (confidence ${check.confidence.toFixed(2)}).` : `Checker rejected the draft: ${check.reason || "no reason given"}`,
+    details: { issues: check.issues, confidence: check.confidence },
   });
 
   // 9. Rejected: DO NOT SEND

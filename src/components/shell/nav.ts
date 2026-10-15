@@ -1,4 +1,4 @@
-import { AlertTriangle, LayoutDashboard, MessageSquare, Settings, Sparkles, Users, type LucideIcon } from "lucide-react";
+import { AlertTriangle, LayoutDashboard, MessageSquare, ScrollText, Settings, Sparkles, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   href: string;
@@ -13,6 +13,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/review", label: "Needs Review", icon: AlertTriangle, badgeKey: "review" },
   { href: "/leads", label: "Leads", icon: Users },
   { href: "/services", label: "Services", icon: Sparkles },
+  { href: "/logs", label: "Logs", icon: ScrollText },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
