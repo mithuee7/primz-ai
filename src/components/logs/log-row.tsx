@@ -61,7 +61,7 @@ export function LogRow({ entry }: { entry: ActivityEntry }) {
 
   const details = entry.details ?? {};
   const fields = Object.entries(details).filter(([k, v]) => FIELD_LABELS[k] && v !== null && v !== undefined && v !== "");
-  const canRetry = Boolean(entry.conversation_id) && (entry.level === "error" || entry.level === "warn");
+  const canRetry = Boolean(entry.conversation_id);
 
   const retry = () => {
     if (!entry.conversation_id) return;
