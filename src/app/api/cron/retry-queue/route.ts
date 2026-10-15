@@ -12,10 +12,10 @@ export const maxDuration = 60;
  * Authenticate with a Authorization: Bearer <CRON_SECRET> header.
  */
 export async function POST(request: NextRequest) {
+  const secret = process.env.CRON_SECRET;
   const auth = request.headers.get("authorization");
-  const expected = `Bearer ${process.env.CRON_SECRET || ""}`;
 
-  if (!auth || auth !== expected) {
+  if (!secret || auth !== `Bearer ${secret}`) {
     console.error("[retry-queue] unauthorized request");
     return new NextResponse("Unauthorized", { status: 401 });
   }
@@ -38,6 +38,9 @@ export async function POST(request: NextRequest) {
       } catch (err) {
         console.error(`[retry-queue] ✗ exception:`, err instanceof Error ? err.message : "unknown");
         failed++;
+      } finally {
+        // Mark attempted either way so a failing row doesn't re-run on every tick.
+        await repo.markRetryAttempted(retry.id).catch((err: unknown) => console.error("[retry-queue] mark attempted failed:", err instanceof Error ? err.message : "unknown"));
       }
     }
 

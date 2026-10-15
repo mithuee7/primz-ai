@@ -117,7 +117,7 @@ export interface Repository {
   /** Schedule a conversation for retry after a random delay (5-10 minutes). */
   scheduleRetry(ownerId: string, conversationId: string, reason: string): Promise<void>;
   /** Get all retries ready to run. */
-  listDueRetries(): Promise<Array<{ owner_id: string; conversation_id: string }>>;
+  listDueRetries(): Promise<Array<{ id: string; owner_id: string; conversation_id: string }>>;
   /** Mark a retry as attempted. */
   markRetryAttempted(retryId: string): Promise<void>;
 

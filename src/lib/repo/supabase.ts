@@ -471,7 +471,7 @@ export class SupabaseRepository implements Repository {
       .order("scheduled_at", { ascending: true })
       .limit(100);
     if (res.error) throw new Error(`listDueRetries: ${res.error.message}`);
-    return (res.data as Array<{ owner_id: string; conversation_id: string }>) || [];
+    return (res.data as Array<{ id: string; owner_id: string; conversation_id: string }>) || [];
   }
 
   async markRetryAttempted(retryId: string) {
