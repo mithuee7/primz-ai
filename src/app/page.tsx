@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { DemoChat } from "@/components/landing/demo-chat";
 import { PlanBuyButton } from "@/components/landing/plan-buy";
+import { ContactMenu } from "@/components/landing/contact-menu";
 import { ScrollLink } from "@/components/landing/scroll-link";
 import { CONTACT_EMAIL, CONTACT_INSTAGRAM, CONTACT_INSTAGRAM_URL } from "@/lib/contact";
 import { PLANS } from "@/lib/plans";
@@ -24,13 +25,13 @@ export default function LandingPage() {
   return (
     <main className="min-h-dvh overflow-x-hidden bg-[#fafafa] text-zinc-900">
       {/* Nav */}
-      <header className="sticky top-0 z-30 border-b border-zinc-200/60 bg-white/70 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <span className="text-[15px] font-semibold tracking-tight">Primz AI</span>
-          <nav className="flex items-center gap-6 text-sm">
+      <header className="sticky top-0 z-30 bg-[#fafafa]/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
+          <span className="text-2xl font-bold tracking-[-0.03em] text-zinc-900">Primz <span className="bg-gradient-to-r from-blue-600 to-fuchsia-600 bg-clip-text text-transparent">AI</span></span>
+          <nav className="flex items-center gap-7 text-[15px] font-medium">
             <ScrollLink target="features" className="hidden text-zinc-600 transition-colors hover:text-zinc-900 sm:inline">Features</ScrollLink>
             <ScrollLink target="plans" className="text-zinc-600 transition-colors hover:text-zinc-900">Pricing</ScrollLink>
-            <a href={`mailto:${CONTACT_EMAIL}`} className="text-zinc-600 transition-colors hover:text-zinc-900">Contact</a>
+            <ContactMenu />
             <Link href="/login" className="rounded-full bg-zinc-900 px-4 py-2 font-semibold text-white transition-all hover:bg-zinc-800 active:scale-[0.97]">Sign in</Link>
           </nav>
         </div>

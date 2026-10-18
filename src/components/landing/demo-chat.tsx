@@ -1,72 +1,123 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { demoReplyAction, type DemoTurn } from "@/app/landing-actions";
+import { useEffect, useRef, useState } from "react";
+import { demoTurnAction, type DemoMessage } from "@/app/landing-actions";
 
-/** Lead messages are fixed. Our replies are written live by the AI each time. */
-const LEAD_LINES = [
-  "hey, saw your post. how does this DM thing work?",
-  "we get a lot of messages from reels and nobody answers fast. is that what this fixes?",
-  "ok sounds interesting. how much does it cost?",
+const LEAD_NAME = "Riya Sharma";
+const OWNER_HANDLE = "your_business";
+const MAX_MESSAGES = 15;
+
+/** Fixed opening: we message first, then the lead replies. Both are shown by default. */
+const OPENING: DemoMessage[] = [
+  { from: "us", text: "hey Riya! saw you're running a lot of ads lately. how are you handling the DMs that come in?" },
+  { from: "lead", text: "honestly it's a mess. I get so many messages and I'm too slow to reply, I lose most of them." },
 ];
 
 export function DemoChat() {
-  const [turns, setTurns] = useState<DemoTurn[]>([]);
-  const [step, setStep] = useState(0);
+  const [messages, setMessages] = useState<DemoMessage[]>(OPENING);
+  const [running, setRunning] = useState(false);
+  const [booked, setBooked] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
+  const [typing, setTyping] = useState<"us" | "lead" | null>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  const cancelled = useRef(false);
 
-  const next = () => {
-    if (step >= LEAD_LINES.length) return;
-    const withLead: DemoTurn[] = [...turns, { role: "lead", text: LEAD_LINES[step]! }];
-    setTurns(withLead);
+  useEffect(() => {
+    scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
+  }, [messages, typing]);
+
+  useEffect(() => () => void (cancelled.current = true), []);
+
+  const play = async () => {
+    setRunning(true);
     setError(null);
-    start(async () => {
-      const res = await demoReplyAction(withLead);
-      if (res.ok) {
-        setTurns([...withLead, { role: "ai", text: res.reply }]);
-        setStep(step + 1);
-      } else {
+    cancelled.current = false;
+    let history = messages;
+    while (!cancelled.current && history.length < MAX_MESSAGES && !booked) {
+      const side = history[history.length - 1]!.from === "us" ? "lead" : "us";
+      setTyping(side);
+      const res = await demoTurnAction(history);
+      setTyping(null);
+      if (!res.ok) {
         setError(res.error);
+        break;
       }
-    });
+      history = [...history, { from: side, text: res.text }];
+      setMessages(history);
+      if (res.booked) {
+        setBooked(true);
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 900));
+    }
+    setRunning(false);
   };
 
-  const reset = () => {
-    setTurns([]);
-    setStep(0);
+  const restart = () => {
+    cancelled.current = true;
+    setMessages(OPENING);
+    setBooked(false);
     setError(null);
+    setRunning(false);
   };
+
+  const finished = booked || messages.length >= MAX_MESSAGES;
 
   return (
-    <div className="mx-auto w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-xl ring-1 ring-zinc-200">
-      <div className="flex items-center gap-2 border-b border-zinc-100 px-4 py-3">
-        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-fuchsia-500 to-amber-400" />
-        <div>
-          <p className="text-sm font-semibold text-zinc-900">your_business</p>
-          <p className="text-[11px] text-zinc-500">Live demo</p>
+    <div className="mx-auto w-full max-w-md overflow-hidden rounded-[28px] border border-zinc-200/80 bg-white shadow-[0_30px_80px_-30px_rgb(24_24_27/0.35)]">
+      {/* Instagram-style header */}
+      <div className="flex items-center gap-3 border-b border-zinc-100 px-5 py-3.5">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-fuchsia-500 via-rose-500 to-amber-400 text-sm font-bold text-white">
+          {LEAD_NAME.split(" ").map((p) => p[0]).join("")}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15px] font-semibold text-zinc-900">{LEAD_NAME}</p>
+          <p className="truncate text-xs text-zinc-500">{OWNER_HANDLE} · Active now</p>
         </div>
       </div>
-      <div className="min-h-[260px] space-y-2 bg-zinc-50 p-4">
-        {turns.length === 0 ? <p className="pt-10 text-center text-sm text-zinc-500">Press play to watch a lead message come in and the AI reply.</p> : null}
-        {turns.map((t, i) => (
-          <div key={i} className={`flex ${t.role === "ai" ? "justify-end" : "justify-start"}`}>
-            <p className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-sm ${t.role === "ai" ? "bg-blue-600 text-white" : "bg-white text-zinc-900 ring-1 ring-zinc-200"}`}>{t.text}</p>
+
+      {/* Thread */}
+      <div ref={scroller} className="h-[360px] space-y-2 overflow-y-auto bg-white px-4 py-5">
+        {messages.map((m, i) => (
+          <div key={i} className={`flex animate-fade-up ${m.from === "us" ? "justify-end" : "justify-start"}`}>
+            <p
+              className={`max-w-[78%] px-4 py-2.5 text-[15px] leading-snug ${
+                m.from === "us"
+                  ? "rounded-[22px] rounded-br-md bg-gradient-to-br from-blue-600 to-indigo-600 text-white"
+                  : "rounded-[22px] rounded-bl-md bg-zinc-100 text-zinc-900"
+              }`}
+            >
+              {m.text}
+            </p>
           </div>
         ))}
-        {pending ? <p className="text-xs text-zinc-500">AI is writing a reply…</p> : null}
-        {error ? <p className="text-xs text-red-600">{error}</p> : null}
+        {typing ? (
+          <div className={`flex ${typing === "us" ? "justify-end" : "justify-start"}`}>
+            <div className="flex gap-1 rounded-full bg-zinc-100 px-4 py-3">
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-400" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-400 [animation-delay:150ms]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-400 [animation-delay:300ms]" />
+            </div>
+          </div>
+        ) : null}
+        {booked ? (
+          <div className="animate-fade-up pt-2 text-center text-xs font-semibold text-emerald-600">✓ Call booked</div>
+        ) : null}
+        {error ? <p className="pt-2 text-center text-xs text-red-600">{error}</p> : null}
       </div>
-      <div className="flex items-center justify-between gap-2 border-t border-zinc-100 px-4 py-3">
-        <button type="button" onClick={reset} className="text-xs text-zinc-500 hover:underline">Restart</button>
-        <button
-          type="button"
-          onClick={next}
-          disabled={pending || step >= LEAD_LINES.length}
-          className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
-        >
-          {step >= LEAD_LINES.length ? "Demo finished" : turns.length === 0 ? "Play demo" : "Next lead message"}
-        </button>
+
+      {/* Input bar, decorative */}
+      <div className="flex items-center justify-between gap-3 border-t border-zinc-100 px-4 py-3">
+        <span className="text-xs text-zinc-400">{messages.length}/{MAX_MESSAGES} messages</span>
+        {finished ? (
+          <button type="button" onClick={restart} className="rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-zinc-800 active:scale-[0.97]">
+            Replay
+          </button>
+        ) : (
+          <button type="button" onClick={play} disabled={running} className="rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-zinc-800 active:scale-[0.97] disabled:opacity-50">
+            {running ? "Live…" : "Watch it reply"}
+          </button>
+        )}
       </div>
     </div>
   );
