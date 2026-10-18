@@ -34,6 +34,16 @@ export async function requestPlanAction(code: string): Promise<{ ok: true } | { 
     return error ? { ok: false, error: "Couldn't start the free plan. Try again." } : { ok: true };
   }
 
+  // During a free trial the trial keeps running. The paid plan starts when you approve it.
+  if (row?.status === "active" && row.plan_code === "free") {
+    const { error } = await db
+      .from("user_plans")
+      .update({ requested_plan_code: code, requested_at: now, updated_at: now })
+      .eq("owner_id", user.id);
+    if (error) return { ok: false, error: "Couldn't record your request. Try again." };
+    return { ok: true };
+  }
+
   const { error } = await db
     .from("user_plans")
     .upsert({ owner_id: user.id, plan_code: code, status: "pending", requested_at: now, updated_at: now }, { onConflict: "owner_id" });
