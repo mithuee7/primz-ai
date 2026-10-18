@@ -5,7 +5,7 @@ import { capitalise } from "@/lib/text/capitalise";
 import { GroqClient } from "@/lib/services/llm/groq";
 import { LLMError } from "@/lib/services/llm/types";
 
-const DEMO_MODEL = process.env.DEMO_GROQ_MODEL || "llama-3.1-8b-instant";
+const DEMO_MODEL = process.env.DEMO_GROQ_MODEL || "qwen/qwen3.8-27b";
 const MAX_MESSAGES = 15;
 
 export interface DemoMessage {
