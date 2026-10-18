@@ -1,13 +1,13 @@
 /**
  * How long a message is shown as being typed. Based on 75% of a fast typist's speed
  * (120 words per minute, 5 characters per word = 10 characters per second), so 7.5 characters per second.
- * Every message is capped at MAX_WORDS, and the delay never exceeds MAX_DELAY_MS.
+ * Every message is capped at MAX_WORDS, and the delay never exceeds MAX_DELAY_MS (6.5 seconds).
  */
 export const TYPING_WPM = 120;
 export const CHARS_PER_WORD = 5;
 export const TYPING_SPEED_FRACTION = 0.75;
-export const MAX_WORDS = 14;
-export const MAX_DELAY_MS = 9000;
+export const MAX_WORDS = 9;
+export const MAX_DELAY_MS = 6500;
 
 export function typingDelayMs(text: string): number {
   const charsPerSecond = (TYPING_WPM * CHARS_PER_WORD) / 60;
