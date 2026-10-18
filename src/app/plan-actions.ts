@@ -14,10 +14,13 @@ export async function requestPlanAction(code: string): Promise<{ ok: true } | { 
   const db = createAdminClient();
   const { data: current } = await db
     .from("user_plans")
-    .select("plan_code, status, review_status, free_trial_used")
+    .select("plan_code, status, review_status, free_trial_used, expires_at")
     .eq("owner_id", user.id)
     .maybeSingle();
-  const row = current as { plan_code: string; status: string; review_status: string; free_trial_used: boolean } | null;
+  const raw = current as { plan_code: string; status: string; review_status: string; free_trial_used: boolean; expires_at: string | null } | null;
+  // A plan past its end date counts as ended, so it can renew instead of being compared as active.
+  const ended = raw?.expires_at ? new Date(raw.expires_at).getTime() <= Date.now() : false;
+  const row = raw && !(raw.status === "active" && ended) ? raw : raw ? { ...raw, status: "expired" } : null;
 
   if (row && row.review_status !== "ok") return { ok: false, error: "Your account is under review. Plans can't be changed right now." };
 
