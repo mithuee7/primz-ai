@@ -4,6 +4,7 @@ import { isAdmin } from "./auth";
 import { AdminLogin } from "./admin-login";
 import { AdminPlans, type AdminRow } from "./admin-plans";
 import { AdminReview, type FlaggedRow } from "./admin-review";
+import { AdminRenewals, type RenewalRow } from "./admin-renewals";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Admin", robots: { index: false, follow: false } };
@@ -79,8 +80,29 @@ export default async function AdminPage() {
     };
   });
 
+  const { data: dueData } = await db
+    .from("user_plans")
+    .select("owner_id, plan_code, status, expires_at, profiles(email, display_name)")
+    .in("status", ["active", "expired"])
+    .lt("expires_at", new Date().toISOString())
+    .order("expires_at", { ascending: true });
+  const renewals: RenewalRow[] = ((dueData ?? []) as unknown as Array<{
+    owner_id: string;
+    plan_code: string;
+    status: string;
+    expires_at: string;
+    profiles: { email: string | null; display_name: string | null } | null;
+  }>).map((r) => ({
+    ownerId: r.owner_id,
+    email: r.profiles?.email ?? "unknown",
+    name: r.profiles?.display_name ?? null,
+    planCode: r.plan_code,
+    endedAt: r.expires_at,
+  }));
+
   return (
     <>
+      <AdminRenewals rows={renewals} />
       <AdminReview rows={flagged} />
       <AdminPlans rows={rows} />
     </>

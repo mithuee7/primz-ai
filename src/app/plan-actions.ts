@@ -36,6 +36,7 @@ export async function requestPlanAction(code: string): Promise<{ ok: true } | { 
 
   // A paid plan waits for approval. The current plan (free trial or paid) keeps running until then.
   // Only upgrades are accepted: never a lower plan or the same plan again.
+  // An ended plan (expired) can renew: the same plan is allowed again, so only active rows are compared.
   if (row?.status === "active") {
     const currentRank = PLAN_RANK[row.plan_code as keyof typeof PLAN_RANK] ?? 0;
     const targetRank = PLAN_RANK[code as keyof typeof PLAN_RANK];

@@ -8,6 +8,7 @@ import { signOutAction } from "@/app/actions";
 import { Avatar } from "@/components/ui/primitives";
 import { PlanMini } from "@/components/plan/plan-mini";
 import type { PlanState } from "@/lib/plan-state";
+import { ExpiredPanel } from "@/components/plan/expired-panel";
 import { cn } from "@/lib/utils";
 import { MOBILE_TAB_HREFS, NAV_ITEMS } from "./nav";
 
@@ -141,7 +142,7 @@ export function AppShell({ user, instagram, reviewCount, plan, children }: Shell
             </button>
           </header>
 
-          <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
+          <main className="min-h-0 flex-1 overflow-hidden">{plan?.state.status === "expired" ? <ExpiredPanel plan={plan.state} /> : children}</main>
 
           {/* Mobile bottom tabs */}
           <nav className="safe-bottom flex shrink-0 border-t border-zinc-200 bg-white md:hidden" aria-label="Primary">

@@ -4,9 +4,9 @@ import { PlanBuyButton } from "@/components/landing/plan-buy";
 import { PLANS, PLAN_RANK, type PlanInfo } from "@/lib/plans";
 
 /** Shows only plans above the current one. Downgrades are never offered. */
-export function UpgradeOptions({ currentCode }: { currentCode: string | null }) {
+export function UpgradeOptions({ currentCode, includeCurrent = false }: { currentCode: string | null; includeCurrent?: boolean }) {
   const current = PLAN_RANK[currentCode as PlanInfo["code"]] ?? -1;
-  const higher = PLANS.filter((p) => p.code !== "free" && PLAN_RANK[p.code] > current);
+  const higher = PLANS.filter((p) => p.code !== "free" && (includeCurrent ? PLAN_RANK[p.code] >= current : PLAN_RANK[p.code] > current));
   if (higher.length === 0) return null;
 
   return (
