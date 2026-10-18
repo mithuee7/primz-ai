@@ -12,10 +12,11 @@ export default async function AdminPage() {
   if (!(await isAdmin())) return <AdminLogin />;
 
   const db = createAdminClient();
-  const { data } = await db
+  const { data, error: plansError } = await db
     .from("user_plans")
     .select("owner_id, plan_code, status, requested_at, activated_at, expires_at, profiles(email, display_name)")
     .order("requested_at", { ascending: false, nullsFirst: false });
+  if (plansError) return <p className="p-6 text-sm text-red-700">Could not load plans: {plansError.message}</p>;
 
   const rows: AdminRow[] = ((data ?? []) as unknown as Array<{
     owner_id: string;

@@ -1,12 +1,14 @@
 "use server";
 
 import { cookies } from "next/headers";
+import { rateLimit } from "@/lib/rate-limit";
 import { PLANS } from "@/lib/plans";
 import { createAdminClient } from "@/lib/supabase/clients";
 import { ADMIN_COOKIE, adminCookieValue, isAdmin, passwordMatches } from "./auth";
 
 export async function adminLoginAction(password: string): Promise<{ ok: boolean; error?: string }> {
   if (!process.env.ADMIN_PASSWORD) return { ok: false, error: "Admin is not configured." };
+  if (!rateLimit("admin-login", 5, 15 * 60_000).ok) return { ok: false, error: "Too many attempts. Wait 15 minutes." };
   if (!passwordMatches(password)) return { ok: false, error: "Wrong password." };
   const jar = await cookies();
   jar.set(ADMIN_COOKIE, adminCookieValue(), { httpOnly: true, secure: true, sameSite: "strict", path: "/admin", maxAge: 60 * 60 * 12 });

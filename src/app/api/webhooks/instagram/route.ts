@@ -60,13 +60,14 @@ export async function POST(request: NextRequest) {
     return new NextResponse("Unknown account", { status: 401 });
   }
 
-  await ensureFreshInstagramToken(ownerId);
-  const ig = new MetaInstagramService((await loadMetaConfig(ownerId)) ?? cfg);
+  const ig = new MetaInstagramService(cfg);
 
   let events;
   try {
     events = await ig.handleWebhook(rawBody, request.headers); // verifies the signature
     console.log("[webhook] signature verified, events parsed:", events.length);
+    // Only after the signature checks out: refreshing the token calls Meta.
+    await ensureFreshInstagramToken(ownerId);
   } catch (err) {
     if (err instanceof WebhookValidationError) {
       console.error("[webhook] signature verification FAILED:", err.message);

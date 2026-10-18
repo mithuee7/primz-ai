@@ -84,12 +84,34 @@ export async function approveGeneration(ownerId: string, generationId: string, t
   if (gen.status !== "PENDING_REVIEW") throw new Error("This draft was already handled");
   const conv = await mustGet(ownerId, gen.conversation_id);
 
-  const sent = await (await getInstagramService(ownerId)).sendMessage({
-    externalThreadId: conv.external_thread_id,
-    recipientExternalId: conv.lead_external_id ?? conv.external_thread_id,
-    text,
-  });
+  // One approval at a time per conversation: a double tap must not send the draft twice.
+  if (!(await repo.acquireLock(ownerId, conv.id, 30_000))) throw new Error("Another reply is being sent. Try again in a moment.");
+  try {
+    const fresh = await repo.getGeneration(ownerId, generationId);
+    if (!fresh || fresh.status !== "PENDING_REVIEW") throw new Error("This draft was already handled");
 
+    const sent = await (await getInstagramService(ownerId)).sendMessage({
+      externalThreadId: conv.external_thread_id,
+      recipientExternalId: conv.lead_external_id ?? conv.external_thread_id,
+      text,
+    });
+    // Mark handled before recording the message, so a failure below can't allow a second send.
+    await repo.updateGeneration(ownerId, gen.id, { status: "APPROVED_MANUALLY" });
+
+    await finishApproval(ownerId, conv, gen, text, sent);
+  } finally {
+    await repo.releaseLock(ownerId, conv.id);
+  }
+}
+
+async function finishApproval(
+  ownerId: string,
+  conv: Awaited<ReturnType<typeof mustGet>>,
+  gen: NonNullable<Awaited<ReturnType<ReturnType<typeof getRepository>["getGeneration"]>>>,
+  text: string,
+  sent: { externalMessageId: string; delivery: string },
+) {
+  const repo = getRepository();
   const edited = text !== (gen.generated_text ?? "");
   await repo.addMessage(ownerId, {
     conversation_id: conv.id,
@@ -107,8 +129,6 @@ export async function approveGeneration(ownerId: string, generationId: string, t
     issues: [],
     reason: edited ? "Edited and approved by operator" : "Approved by operator",
   });
-  await repo.updateGeneration(ownerId, gen.id, { status: "APPROVED_MANUALLY" });
-
   const parsedUpdate = gen.state_update as Parameters<typeof nextState>[1]["state_update"] | null;
   const patch = parsedUpdate ? nextState(conv.state, { reply: text, state_update: parsedUpdate, escalate_reason: null }) : {};
   await repo.updateState(ownerId, conv.id, {

@@ -263,7 +263,8 @@ function claimStatusFor(outcome: PipelineOutcome, trace: RunTrace): ReplyClaimSt
     case "SKIPPED":
       return "ABORTED";
     case "ERROR_NOT_SENT":
-      return "FAILED";
+      // Rate-limited runs are scheduled for retry, so keep them retryable instead of "needs a person".
+      return outcome.reason.includes("Will retry automatically") ? "RATE_LIMITED" : "FAILED";
   }
 }
 

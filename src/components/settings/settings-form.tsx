@@ -302,6 +302,16 @@ export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, day
           <p className="text-sm text-zinc-500">Demo mode uses a simulated Instagram. Nothing is sent to real accounts.</p>
         ) : (
           <>
+            <div className="rounded-xl bg-zinc-50 p-3 text-xs text-zinc-600">
+              <p className="font-medium text-zinc-800">How to get your access token and app secret from Meta</p>
+              <ul className="mt-2 list-disc space-y-1.5 pl-4">
+                <li>Go to developers.facebook.com and open your app. Create one if you don&apos;t have it yet, and add the <b>Instagram</b> product.</li>
+                <li>Make sure your Instagram account is a Business or Creator account and is added to the app.</li>
+                <li>Open <b>Instagram → API setup with Instagram login</b>, generate an access token for your account, and copy it. This is your <b>Access token</b>.</li>
+                <li>Open <b>App settings → Basic</b>, click <b>Show</b> next to <b>App secret</b>, enter your Meta password, and copy it. This is your <b>Instagram app secret</b>.</li>
+                <li>Paste both below and click <b>Connect &amp; verify</b>.</li>
+              </ul>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="ig-token" className="label">Access token</label>

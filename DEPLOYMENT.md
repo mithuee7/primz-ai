@@ -191,3 +191,12 @@ Monitor Render logs for:
 - `src/app/api/cron/retry-queue/route.ts` - Retry queue processor
 - `supabase/migrations/0003_retry_queue.sql` - Retry table
 - `supabase/migrations/0004_add_rate_limited_status.sql` - Status update
+
+
+## Secrets added with plans
+
+Set these as Cloudflare Worker secrets (`wrangler secret put NAME`):
+
+- `ADMIN_PASSWORD` for the /admin page. Without it, admin is locked.
+- `BASIC_GROQ_KEYS` and `BASIC_APIFY_KEYS` for the Free and Basic plans, comma separated.
+- `DEMO_GROQ_API_KEY` (optional `DEMO_GROQ_MODEL`) for the homepage demo.

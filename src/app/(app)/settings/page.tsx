@@ -8,7 +8,7 @@ import { getRepository } from "@/lib/repo";
 import { getInstagramService } from "@/lib/services/instagram";
 import { daysLeft } from "@/lib/services/instagram/token";
 import { getLlmStatus } from "@/lib/services/llm/resolve";
-import { decryptFromStorage } from "@/lib/secrets";
+import { decryptFromStorage, tryDecrypt } from "@/lib/secrets";
 import type { PublicAppSettings } from "@/lib/types";
 
 export const metadata = { title: "Settings" };
@@ -22,7 +22,7 @@ export default async function SettingsPage() {
   const settings: PublicAppSettings = {
     ...rest,
     ai_key_saved: Boolean(ai_key_encrypted),
-    groq_key_saved: Boolean(groq_key_encrypted),
+    groq_key_saved: Boolean(tryDecrypt(groq_key_encrypted)),
     apify_key_saved: Boolean(apify_key_encrypted),
     meta_token_saved: Boolean(meta_token_encrypted),
     meta_app_secret_saved: Boolean(meta_app_secret_encrypted),
