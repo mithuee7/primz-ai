@@ -1,6 +1,7 @@
 "use server";
 
 import { rateLimit } from "@/lib/rate-limit";
+import { capitalise } from "@/lib/text/capitalise";
 import { GroqClient } from "@/lib/services/llm/groq";
 import { LLMError } from "@/lib/services/llm/types";
 
@@ -15,11 +16,6 @@ export interface DemoMessage {
 const OWNER_SYSTEM = `You reply to Instagram DMs for a small AI agency. Your goal: get the lead onto a short call. Keep replies to one or two short, casual sentences, like a real person typing on a phone. Ask at most one question. Never mention being an AI. When the lead agrees to a call or gives a time, confirm it and set "booked" to true. Otherwise "booked" is false. Return ONLY JSON: {"reply": "...", "booked": true|false}`;
 
 const LEAD_SYSTEM = `You play a small business owner who gets many Instagram DMs and is busy and a bit skeptical. You are slow to answer and you tell the truth about your problem: lots of DMs, not enough time, leads going cold. Reply in one or two short, casual sentences with normal capitalisation. You only agree to a call when the other person has made a clear, specific offer that fits your problem. Return ONLY JSON: {"reply": "..."}`;
-
-/** Capitalise the first letter of each sentence. */
-export function capitalise(text: string): string {
-  return text.replace(/(^|[.!?]\s+)([a-z])/g, (_, lead: string, ch: string) => lead + ch.toUpperCase());
-}
 
 function transcript(history: DemoMessage[]): string {
   return history.map((m) => `${m.from === "lead" ? "THEM" : "YOU"}: ${m.text}`).join("\n");

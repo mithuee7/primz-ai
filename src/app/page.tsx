@@ -8,6 +8,8 @@ import { ScrollLink } from "@/components/landing/scroll-link";
 import { CONTACT_EMAIL, CONTACT_INSTAGRAM, CONTACT_INSTAGRAM_URL } from "@/lib/contact";
 import { PLANS } from "@/lib/plans";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = { title: "Primz AI · Turn Instagram leads into calls" };
 
 const FEATURES = [
