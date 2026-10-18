@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { demoTurnAction, type DemoMessage } from "@/app/landing-actions";
+import { typingDelayMs } from "@/lib/text/typing";
 
 const LEAD_NAME = "Riya Sharma";
 const MAX_MESSAGES = 15;
@@ -36,11 +37,14 @@ export function DemoChat() {
       const side = history[history.length - 1]!.from === "us" ? "lead" : "us";
       setTyping(side);
       const res = await demoTurnAction(history);
-      setTyping(null);
       if (!res.ok) {
+        setTyping(null);
         setError(res.error);
         break;
       }
+      // Show the typing indicator for as long as a person would take to type this reply.
+      await new Promise((r) => setTimeout(r, typingDelayMs(res.text)));
+      setTyping(null);
       history = [...history, { from: side, text: res.text }];
       setMessages(history);
       if (res.booked) {
