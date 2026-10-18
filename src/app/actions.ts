@@ -6,7 +6,7 @@ import { requireUserForAction } from "@/lib/auth";
 import { encryptForStorage, tryDecrypt } from "@/lib/secrets";
 import { resolveGroqKey } from "@/lib/services/llm/resolve";
 import { listProviderModels } from "@/lib/services/llm/models";
-import { basicGroqKeys, getPlanState } from "@/lib/plan-state";
+import { basicGroqKeys, getPlanState, isPlatformKeyPlan } from "@/lib/plan-state";
 import { isDemoMode } from "@/lib/env";
 import { getRepository } from "@/lib/repo";
 import { rateLimit } from "@/lib/rate-limit";
@@ -251,7 +251,7 @@ export async function listModelsAction(input: unknown): Promise<ActionResult<str
         // Basic plans run on the platform's Groq keys, so the list still loads for them.
         if (!key) {
           const plan = await getPlanState(ownerId);
-          if (plan.active && plan.code === "basic") key = basicGroqKeys()[0] ?? "";
+          if (isPlatformKeyPlan(plan)) key = basicGroqKeys()[0] ?? "";
         }
       } else if (settings.ai_provider === parsed.provider) {
         key = tryDecrypt(settings.ai_key_encrypted) ?? "";

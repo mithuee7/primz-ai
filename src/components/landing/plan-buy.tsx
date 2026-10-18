@@ -46,11 +46,17 @@ export function PlanBuyButton({
     setBusy(true);
     setError(null);
     const res = await requestPlanAction(code);
-    setBusy(false);
     if (!res.ok) {
+      setBusy(false);
       setError(res.error);
       return;
     }
+    if (code === "free") {
+      // Free starts at once. No Instagram message needed.
+      window.location.href = "/dashboard";
+      return;
+    }
+    setBusy(false);
     const message = `Hi! I want the ${name} plan (₹${price.toLocaleString("en-IN")}/month). I'm signed in to Primz AI and I'd like help connecting my Instagram. I know it's beta.`;
     let copied = false;
     try {

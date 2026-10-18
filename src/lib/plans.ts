@@ -4,7 +4,7 @@
  * Prices are suggestions for India (INR per month) and are not yet confirmed.
  */
 export interface PlanInfo {
-  code: "basic" | "starter" | "growth" | "business";
+  code: "free" | "basic" | "starter" | "growth" | "business";
   name: string;
   price: number;
   accounts: number;
@@ -15,6 +15,15 @@ export interface PlanInfo {
 }
 
 export const PLANS: PlanInfo[] = [
+  {
+    code: "free",
+    name: "Free",
+    price: 0,
+    accounts: 1,
+    chatsPerAccount: 3,
+    keys: "We provide the AI and Apify keys",
+    highlights: ["1 Instagram account", "3 chats to try it", "Fair-use rate limit"],
+  },
   {
     code: "basic",
     name: "Basic",

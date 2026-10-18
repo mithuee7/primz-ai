@@ -13,6 +13,8 @@ export interface PlanState {
   requestedAt: string | null;
   activatedAt: string | null;
   expiresAt: string | null;
+  reviewStatus: "ok" | "review" | "blocked";
+  reviewReason: string | null;
 }
 
 /** Platform keys the owner provides for the Basic plan. Set as secrets: BASIC_GROQ_KEYS, BASIC_APIFY_KEYS (comma separated). */
@@ -29,7 +31,7 @@ export async function getPlanState(ownerId: string): Promise<PlanState> {
   const db = createAdminClient();
   const { data } = await db
     .from("user_plans")
-    .select("plan_code, status, requested_at, activated_at, expires_at")
+    .select("plan_code, status, requested_at, activated_at, expires_at, review_status, review_reason")
     .eq("owner_id", ownerId)
     .maybeSingle();
   const row = data as {
@@ -38,6 +40,8 @@ export async function getPlanState(ownerId: string): Promise<PlanState> {
     requested_at: string | null;
     activated_at: string | null;
     expires_at: string | null;
+    review_status: PlanState["reviewStatus"];
+    review_reason: string | null;
   } | null;
   const code = row?.plan_code ?? "free";
   const status = row?.status ?? "inactive";
@@ -52,7 +56,14 @@ export async function getPlanState(ownerId: string): Promise<PlanState> {
     requestedAt: row?.requested_at ?? null,
     activatedAt: row?.activated_at ?? null,
     expiresAt: row?.expires_at ?? null,
+    reviewStatus: row?.review_status ?? "ok",
+    reviewReason: row?.review_reason ?? null,
   };
+}
+
+/** Free and Basic use the platform keys. Paid plans other than Basic use their own. */
+export function isPlatformKeyPlan(plan: PlanState): boolean {
+  return plan.active && (plan.code === "basic" || plan.code === "free");
 }
 
 /**
@@ -60,6 +71,7 @@ export async function getPlanState(ownerId: string): Promise<PlanState> {
  * Chats beyond the plan limit (oldest first) keep their history but get no AI replies.
  */
 export function chatLimitReason(plan: PlanState, rank: number): string | null {
+  if (plan.reviewStatus !== "ok") return "Your account is under review. AI replies are paused while we check it.";
   if (!plan.active) return "No active plan. Choose a plan on the landing page.";
   if (rank >= plan.chatsPerAccount) return `Your ${plan.name} plan allows ${plan.chatsPerAccount} chats. This chat is over the limit.`;
   return null;

@@ -18,6 +18,19 @@ export async function adminLogoutAction(): Promise<void> {
   jar.delete({ name: ADMIN_COOKIE, path: "/admin" });
 }
 
+/** Clears or blocks an account that the abuse check flagged. */
+export async function adminReviewAction(ownerId: string, action: "clear" | "block"): Promise<{ ok: boolean; error?: string }> {
+  if (!(await isAdmin())) return { ok: false, error: "Not signed in to admin." };
+  const db = createAdminClient();
+  const now = new Date().toISOString();
+  const update =
+    action === "clear"
+      ? { review_status: "ok", review_reason: null, flagged_at: null, updated_at: now }
+      : { review_status: "blocked", status: "inactive", updated_at: now };
+  const { error } = await db.from("user_plans").update(update).eq("owner_id", ownerId);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
 /** Confirms or changes a user's plan. Buyers are told activation takes up to 48 hours. */
 export async function adminSetPlanAction(
   ownerId: string,
