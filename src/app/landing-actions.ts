@@ -8,6 +8,8 @@ import { LLMError } from "@/lib/services/llm/types";
 
 const DEMO_MODEL = process.env.DEMO_GROQ_MODEL || "qwen/qwen3.8-27b";
 const MAX_MESSAGES = 15;
+/** Message count from which both sides steer to a booked call. */
+const CLOSE_AFTER = 10;
 
 export interface DemoMessage {
   from: "us" | "lead";
@@ -67,12 +69,16 @@ export async function demoTurnAction(
   const clean = history.slice(-12).map((m) => ({ from: m.from === "lead" ? "lead" : "us", text: String(m.text).slice(0, 300) }) as DemoMessage);
   const next: "us" | "lead" = clean[clean.length - 1]!.from === "us" ? "lead" : "us";
   const isOwner = next === "us";
+  // Late in the chat both sides steer to a call: the owner proposes a specific time, the lead accepts it.
+  const closing = clean.length >= CLOSE_AFTER;
+  const ownerSystem = closing ? `${OWNER_SYSTEM}\n\nCLOSING NOW: propose one specific call time (day and clock time) and ask them to confirm it. Set "booked" to true.` : OWNER_SYSTEM;
+  const leadSystem = closing && !isOwner ? `${LEAD_SYSTEM}\n\nThe other person has offered a call. Accept the proposed time warmly and confirm it.` : LEAD_SYSTEM;
 
   try {
     const raw = await new GroqClient(key).complete({
       purpose: "conversation",
       model: DEMO_MODEL,
-      system: isOwner ? OWNER_SYSTEM : LEAD_SYSTEM,
+      system: isOwner ? ownerSystem : leadSystem,
       user: `CONVERSATION\n${transcript(clean)}\n\nWrite the next message for ${isOwner ? "YOU" : "THEM"}.`,
       temperature: 0.8,
       maxTokens: 160,
@@ -81,7 +87,9 @@ export async function demoTurnAction(
     const parsed = JSON.parse(raw) as { reply?: unknown; booked?: unknown };
     const text = typeof parsed.reply === "string" ? parsed.reply.trim() : "";
     if (!text) return { ok: false, error: "No reply came back. Try again." };
-    return { ok: true, text: capitalise(text.slice(0, 400)), booked: isOwner && parsed.booked === true };
+    // A closing owner turn always books the call, so every run ends in a booked call.
+    const booked = isOwner && (closing || parsed.booked === true);
+    return { ok: true, text: capitalise(text.slice(0, 400)), booked };
   } catch (err) {
     const detail = err instanceof LLMError ? err.message : "unexpected error";
     return { ok: false, error: `The demo couldn't reach the AI (${detail}).` };
