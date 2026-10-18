@@ -10,7 +10,7 @@ const MAX_MESSAGES = 15;
 /** Fixed opening: we message first, then the lead replies. Both are shown by default. */
 const OPENING: DemoMessage[] = [
   { from: "us", text: "Hey Riya! Saw you're running a lot of ads lately. How are you handling the DMs that come in?" },
-  { from: "lead", text: "Honestly it's a mess. I get so many messages and I'm too slow to reply, I lose most of them." },
+  { from: "lead", text: "Hey, yeah. What's this about?" },
 ];
 
 export function DemoChat() {
@@ -102,9 +102,6 @@ export function DemoChat() {
               <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-400 [animation-delay:300ms]" />
             </div>
           </div>
-        ) : null}
-        {booked ? (
-          <div className="animate-fade-up pt-2 text-center text-xs font-semibold text-emerald-600">✓ Call booked</div>
         ) : null}
         {error ? <p className="pt-2 text-center text-xs text-red-600">{error}</p> : null}
       </div>

@@ -39,6 +39,7 @@ Return ONLY JSON: {"reply": "...", "booked": true|false}. Set "booked" to true o
 const LEAD_SYSTEM = `You play a real small business owner who runs ads and gets many Instagram DMs. You are busy, honest, and reasonable. Your budget is limited (about ₹1,000 to ₹2,000 a month at most). You don't want to waste time.
 
 How a real buyer behaves in this kind of DM:
+- Never dump your whole problem in one message. Start vague and curious, like a real person who isn't sure yet. Reveal details one piece at a time only when asked or when it's natural, and never list your pain points at once.
 - Short replies, one or two sentences, casual, normal capitalisation. No emojis. No long speeches.
 - You admit your real problem (too many DMs, slow replies, leads going cold).
 - You ask about price directly and you push back on high numbers with a specific counter, not a fake one.
@@ -71,8 +72,8 @@ export async function demoTurnAction(
   const isOwner = next === "us";
   // Late in the chat both sides steer to a call: the owner proposes a specific time, the lead accepts it.
   const closing = clean.length >= CLOSE_AFTER;
-  const ownerSystem = closing ? `${OWNER_SYSTEM}\n\nCLOSING NOW: propose one specific call time (day and clock time) and ask them to confirm it. Set "booked" to true.` : OWNER_SYSTEM;
-  const leadSystem = closing && !isOwner ? `${LEAD_SYSTEM}\n\nThe other person has offered a call. Accept the proposed time warmly and confirm it.` : LEAD_SYSTEM;
+  const ownerSystem = closing ? `${OWNER_SYSTEM}\n\nCLOSING NOW: propose one specific call time (day and clock time) and ask if that works. Keep it to one short message.` : OWNER_SYSTEM;
+  const leadSystem = closing && !isOwner ? `${LEAD_SYSTEM}\n\nThe other person has proposed a call time. Reply with a short, natural confirmation that names that day and time, for example "sure, see you on the call tomorrow at 2pm". Don't ask anything else.` : LEAD_SYSTEM;
 
   try {
     const raw = await new GroqClient(key).complete({
@@ -87,8 +88,8 @@ export async function demoTurnAction(
     const parsed = JSON.parse(raw) as { reply?: unknown; booked?: unknown };
     const text = typeof parsed.reply === "string" ? parsed.reply.trim() : "";
     if (!text) return { ok: false, error: "No reply came back. Try again." };
-    // A closing owner turn always books the call, so every run ends in a booked call.
-    const booked = isOwner && (closing || parsed.booked === true);
+    // The call counts as booked once the lead confirms the time in the closing turn.
+    const booked = !isOwner && closing;
     return { ok: true, text: capitalise(text.slice(0, 400)), booked };
   } catch (err) {
     const detail = err instanceof LLMError ? err.message : "unexpected error";
