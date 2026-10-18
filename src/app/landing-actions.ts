@@ -18,7 +18,7 @@ export interface DemoMessage {
 }
 
 const PRICE_FACTS = PLANS.map(
-  (p) => `- ${p.name}: ₹${p.price.toLocaleString("en-IN")}/month, ${p.accounts} Instagram account${p.accounts > 1 ? "s" : ""}, ${p.chatsPerAccount} chats per account. ${p.keys}.`,
+  (p) => `- ${p.name}: ₹${p.price.toLocaleString("en-IN")}/month, one Instagram account, ${p.chatsPerAccount} chats. ${p.keys}.`,
 ).join("\n");
 
 const OWNER_SYSTEM = `You are the owner of Primz, an AI systems agency that sets up Instagram DM assistants. You are typing a DM to a small business owner who just started talking with you. You want them on a short call, but you get there slowly and naturally, the way a real person does.
