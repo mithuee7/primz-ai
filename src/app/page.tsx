@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { createAuthClient } from "@/lib/supabase/clients";
 import { DemoChat } from "@/components/landing/demo-chat";
 import { PlanBuyButton } from "@/components/landing/plan-buy";
@@ -28,7 +27,7 @@ const STEPS = [
 export default async function LandingPage() {
   const supabase = await createAuthClient();
   const { data } = await supabase.auth.getUser();
-  if (data.user) redirect("/dashboard");
+  const signedIn = Boolean(data.user);
 
   return (
     <main className="min-h-dvh overflow-x-hidden bg-[#fafafa] text-zinc-900">
@@ -40,7 +39,7 @@ export default async function LandingPage() {
             <ScrollLink target="features" className="hidden text-zinc-600 transition-colors hover:text-zinc-900 sm:inline">Features</ScrollLink>
             <ScrollLink target="plans" className="text-zinc-600 transition-colors hover:text-zinc-900">Pricing</ScrollLink>
             <ContactMenu />
-            <Link href="/login" className="rounded-full bg-zinc-900 px-4 py-2 font-semibold text-white transition-all hover:bg-zinc-800 active:scale-[0.97]">Sign up</Link>
+            <Link href={signedIn ? "/dashboard" : "/login"} className="rounded-full bg-zinc-900 px-4 py-2 font-semibold text-white transition-all hover:bg-zinc-800 active:scale-[0.97]">{signedIn ? "Dashboard" : "Sign up"}</Link>
           </nav>
         </div>
       </header>
