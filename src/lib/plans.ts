@@ -18,7 +18,7 @@ export const PLANS: PlanInfo[] = [
   {
     code: "basic",
     name: "Basic",
-    price: 999,
+    price: 299,
     accounts: 1,
     chatsPerAccount: 25,
     keys: "We provide the AI and Apify keys",
@@ -27,7 +27,7 @@ export const PLANS: PlanInfo[] = [
   {
     code: "starter",
     name: "Starter",
-    price: 1999,
+    price: 999,
     accounts: 1,
     chatsPerAccount: 50,
     keys: "Bring your own AI and Apify keys",
@@ -36,7 +36,7 @@ export const PLANS: PlanInfo[] = [
   {
     code: "growth",
     name: "Growth",
-    price: 4999,
+    price: 1999,
     accounts: 3,
     chatsPerAccount: 100,
     keys: "Bring your own AI and Apify keys",
@@ -46,7 +46,7 @@ export const PLANS: PlanInfo[] = [
   {
     code: "business",
     name: "Business",
-    price: 9999,
+    price: 4999,
     accounts: 10,
     chatsPerAccount: 100,
     keys: "Bring your own AI and Apify keys",
