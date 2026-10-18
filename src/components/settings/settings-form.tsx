@@ -17,7 +17,8 @@ import {
   saveAiProviderAction,
 } from "@/app/actions";
 import { Badge, Button, Card } from "@/components/ui/primitives";
-import { CONTACT_EMAIL, SETUP_PRICE_INR } from "@/lib/contact";
+import { SETUP_PRICE_INR } from "@/lib/contact";
+import { useInstagramHandoff } from "@/components/landing/instagram-handoff";
 import type { AiProvider } from "@/lib/services/llm/provider-types";
 import { TONES, TONE_LABELS, type PublicAppSettings, type Tone } from "@/lib/types";
 import { KeyManager } from "./key-manager";
@@ -33,6 +34,7 @@ export interface SettingsViewProps {
   planActive: boolean;
   /** Own AI and Apify keys: paid plans other than Basic (Basic uses the platform keys). */
   ownKeys: boolean;
+  accountEmail: string;
 }
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
@@ -201,33 +203,43 @@ function AiProviderSection({ current, groqKeyCount, groqLastFour }: { current: P
   );
 }
 
-/** The done-for-you offer. The price is shown only after the person asks for it. */
-function SetupOffer({ what }: { what: string }) {
+/** The done-for-you offer. The price shows after the click; then the same copy-and-open flow as buying a plan. */
+function SetupOffer({ accountEmail }: { accountEmail: string }) {
   const [open, setOpen] = useState(false);
+  const handoff = useInstagramHandoff("We'll reply in the chat to set it up.");
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-zinc-300 bg-zinc-50/60 p-4">
       {open ? (
         <>
           <p className="text-sm text-zinc-600">
-            We&apos;ll generate and connect {what} for you for <span className="font-semibold text-zinc-900">₹{SETUP_PRICE_INR}</span>.
+            We&apos;ll generate and connect your Instagram API connection for you for <span className="font-semibold text-zinc-900">₹{SETUP_PRICE_INR}</span>.
           </p>
-          <a href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("Setup: " + what)}`} className="rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition-all hover:bg-zinc-800 active:scale-[0.97]">
+          <button
+            type="button"
+            onClick={() =>
+              handoff.begin(
+                `Hi! Please set up my Instagram API connection for me for ₹${SETUP_PRICE_INR}. I'm signed in to Primz AI as ${accountEmail}.`,
+              )
+            }
+            className="rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition-all hover:bg-zinc-800 active:scale-[0.97]"
+          >
             Request setup
-          </a>
+          </button>
         </>
       ) : (
         <>
-          <p className="text-sm text-zinc-600">Don&apos;t want to set up {what} yourself?</p>
+          <p className="text-sm text-zinc-600">Don&apos;t want to set up your Instagram API yourself?</p>
           <button type="button" onClick={() => setOpen(true)} className="rounded-full border border-zinc-300 bg-white px-4 py-2 text-xs font-semibold text-zinc-900 transition-all hover:bg-zinc-50 active:scale-[0.97]">
             Get it done for you
           </button>
         </>
       )}
+      {handoff.overlay}
     </div>
   );
 }
 
-export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, daysLeft, demo, planActive, ownKeys }: SettingsViewProps) {
+export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, daysLeft, demo, planActive, ownKeys, accountEmail }: SettingsViewProps) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -332,7 +344,7 @@ export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, day
               <code className="block break-all rounded bg-white px-2 py-1">{settings.meta_verify_token ?? "Appears after you connect"}</code>
               <p className="mt-2">Subscribe to the <b>messages</b> field.</p>
             </div>
-            <SetupOffer what="your Instagram API connection" />
+            <SetupOffer accountEmail={accountEmail} />
           </>
         )}
       </Section>
