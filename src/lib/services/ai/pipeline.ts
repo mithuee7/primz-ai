@@ -3,6 +3,7 @@ import { getEnv } from "@/lib/env";
 import { getRepository } from "@/lib/repo";
 import type { CheckerIssue, GenerationOutput } from "@/lib/schemas";
 import { logActivity, type ActivityLevel } from "@/lib/services/activity-log";
+import { chatLimitReason, getPlanState } from "@/lib/plan-state";
 import { getInstagramService, InstagramApiError, InstagramNotConfiguredError } from "@/lib/services/instagram";
 import { LLMError } from "@/lib/services/llm/types";
 import { resolveLLM } from "@/lib/services/llm/resolve";
@@ -146,6 +147,15 @@ async function runOnce(opts: PipelineOptions): Promise<{ outcome: PipelineOutcom
     const conv = await repo.getConversation(ownerId, conversationId);
     if (!conv) return skip("Conversation not found");
     if (!conv.settings.auto_chat_enabled) return skip("Auto chat is off");
+    // Plan and chat limits are enforced against Supabase. Tests and demo mode have no database.
+    if (process.env.NODE_ENV !== "test" && process.env.DEMO_MODE !== "true") {
+      const plan = await getPlanState(ownerId);
+      const all = await repo.listConversations(ownerId);
+      const autoOn = all.filter((c) => c.settings.auto_chat_enabled).sort((a, b) => a.created_at.localeCompare(b.created_at));
+      const rank = autoOn.findIndex((c) => c.id === conversationId);
+      const planReason = chatLimitReason(plan, rank < 0 ? 0 : rank);
+      if (planReason) return skip(planReason);
+    }
     if (conv.state.conversation_stage === "HUMAN_TAKEOVER") return skip("Human has taken over");
     if (conv.state.needs_review) return skip("Waiting on a human review");
 

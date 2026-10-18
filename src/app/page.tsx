@@ -121,7 +121,7 @@ export default async function LandingPage() {
                 <li className="flex gap-2"><span className="text-blue-600">•</span>{p.keys}</li>
               </ul>
               <div className="mt-8">
-                <PlanBuyButton name={p.name} price={p.price} featured={p.featured} signedIn={signedIn} />
+                <PlanBuyButton code={p.code} name={p.name} price={p.price} featured={p.featured} signedIn={signedIn} />
               </div>
             </div>
           ))}
