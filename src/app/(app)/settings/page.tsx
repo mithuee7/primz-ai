@@ -79,7 +79,7 @@ export default async function SettingsPage() {
         daysLeft={daysLeft(raw.meta_token_expires_at)}
         demo={user.demo}
         planActive={user.demo || Boolean(plan?.active)}
-        ownKeys={user.demo || Boolean(plan?.active && plan.code !== "basic")}
+        ownKeys={user.demo || Boolean(plan?.active && plan.code !== "basic" && plan.code !== "free")}
       />
     </div>
   );

@@ -1,7 +1,7 @@
 "use server";
 
 import { requireUserForAction } from "@/lib/auth";
-import { PLANS } from "@/lib/plans";
+import { FREE_TRIAL_DAYS, PLANS } from "@/lib/plans";
 import { createAdminClient } from "@/lib/supabase/clients";
 
 /**
@@ -14,18 +14,21 @@ export async function requestPlanAction(code: string): Promise<{ ok: true } | { 
   const db = createAdminClient();
   const { data: current } = await db
     .from("user_plans")
-    .select("plan_code, status, review_status")
+    .select("plan_code, status, review_status, activated_at")
     .eq("owner_id", user.id)
     .maybeSingle();
-  const row = current as { plan_code: string; status: string; review_status: string } | null;
+  const row = current as { plan_code: string; status: string; review_status: string; activated_at: string | null } | null;
 
   if (row && row.review_status !== "ok") return { ok: false, error: "Your account is under review. Plans can't be changed right now." };
 
   const now = new Date().toISOString();
   if (code === "free") {
     if (row?.status === "active" && row.plan_code !== "free") return { ok: false, error: "You already have a paid plan." };
+    // The free trial runs once per account. It ends after FREE_TRIAL_DAYS.
+    if (row?.plan_code === "free" && row.activated_at) return { ok: false, error: "The free trial can only be used once." };
+    const expires = new Date(Date.now() + FREE_TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
     const { error } = await db.from("user_plans").upsert(
-      { owner_id: user.id, plan_code: "free", status: "active", requested_at: now, activated_at: now, expires_at: null, updated_at: now },
+      { owner_id: user.id, plan_code: "free", status: "active", requested_at: now, activated_at: now, expires_at: expires, updated_at: now },
       { onConflict: "owner_id" },
     );
     return error ? { ok: false, error: "Couldn't start the free plan. Try again." } : { ok: true };

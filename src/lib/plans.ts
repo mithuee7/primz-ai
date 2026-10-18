@@ -3,6 +3,9 @@
  * (supabase/migrations/0008_plans.sql). Change prices here and in the SQL together.
  * Prices are suggestions for India (INR per month) and are not yet confirmed.
  */
+/** The free plan runs for this many days, once per account. */
+export const FREE_TRIAL_DAYS = 7;
+
 export interface PlanInfo {
   code: "free" | "basic" | "growth" | "business";
   name: string;
@@ -22,7 +25,7 @@ export const PLANS: PlanInfo[] = [
     accounts: 1,
     chatsPerAccount: 3,
     keys: "We provide the AI and Apify keys",
-    highlights: ["1 Instagram account", "3 chats to try it", "Fair-use rate limit"],
+    highlights: ["1 Instagram account", "3 chats", "7-day free trial"],
   },
   {
     code: "basic",

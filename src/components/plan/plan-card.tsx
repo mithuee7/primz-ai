@@ -32,11 +32,12 @@ export function PlanCard({ plan, activeChats }: { plan: PlanState; activeChats: 
   let detail: string;
   if (plan.active && plan.expiresAt) {
     const left = daysUntil(plan.expiresAt);
-    detail = `Valid until ${formatDate(plan.expiresAt)}${left > 0 ? ` · ${left} days left` : ""}`;
+    const end = plan.code === "free" ? "Free trial ends" : "Valid until";
+    detail = `${end} ${formatDate(plan.expiresAt)}${left > 0 ? ` · ${left} days left` : ""}`;
   } else if (plan.status === "pending" && plan.requestedAt) {
     detail = `Requested ${formatDate(plan.requestedAt)}. We activate it within 48 hours of your request.`;
   } else if (plan.status === "expired") {
-    detail = "Your plan has ended. AI replies are paused until you renew.";
+    detail = plan.code === "free" ? "Your 7-day free trial has ended. Choose a plan to keep AI replies on." : "Your plan has ended. AI replies are paused until you renew.";
   } else {
     detail = "Choose a plan to start AI replies on your chats.";
   }

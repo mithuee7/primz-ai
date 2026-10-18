@@ -1,6 +1,7 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { getRepository } from "@/lib/repo";
+import { createAdminClient } from "@/lib/supabase/clients";
 import { encryptForStorage, tryDecrypt } from "@/lib/secrets";
 import { graphRequest } from "./graph";
 
@@ -65,6 +66,15 @@ export async function connectInstagram(ownerId: string, input: { accessToken: st
   });
   const accountId = String(me.user_id ?? me.id ?? "");
   if (!accountId) throw new Error("Instagram didn't return an account id for this token.");
+
+  // One Instagram account connects to one Primz account (on every plan). Check before saving.
+  const { data: owner } = await createAdminClient()
+    .from("app_settings")
+    .select("owner_id")
+    .eq("meta_ig_account_id", accountId)
+    .neq("owner_id", ownerId)
+    .maybeSingle();
+  if (owner) throw new Error("This Instagram account is already connected to another Primz account. One Instagram account can only connect to one email.");
 
   const current = await repo.getAppSettings(ownerId);
   const now = new Date();

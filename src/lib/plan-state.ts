@@ -44,8 +44,9 @@ export async function getPlanState(ownerId: string): Promise<PlanState> {
     review_reason: string | null;
   } | null;
   const code = row?.plan_code ?? "free";
-  const status = row?.status ?? "inactive";
   const notExpired = !row?.expires_at || new Date(row.expires_at).getTime() > Date.now();
+  // An active plan past its end date shows as expired.
+  const status: PlanState["status"] = row?.status === "active" && !notExpired ? "expired" : row?.status ?? "inactive";
   const plan = PLANS.find((p) => p.code === code);
   return {
     code,
