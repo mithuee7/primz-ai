@@ -1,6 +1,8 @@
 import { SettingsForm } from "@/components/settings/settings-form";
 import { PageHeader } from "@/components/ui/primitives";
+import { PlanCard } from "@/components/plan/plan-card";
 import { requireUser } from "@/lib/auth";
+import { getPlanState } from "@/lib/plan-state";
 import { headers } from "next/headers";
 import { getRepository } from "@/lib/repo";
 import { getInstagramService } from "@/lib/services/instagram";
@@ -51,6 +53,9 @@ export default async function SettingsPage() {
   }
 
   const llmStatus = getLlmStatus(raw);
+  const plan = await getPlanState(user.id);
+  const allConversations = await getRepository().listConversations(user.id);
+  const activeChats = allConversations.filter((c) => c.settings.auto_chat_enabled).length;
 
   const ig = await (await getInstagramService(user.id)).getStatus();
   const h = await headers();
@@ -60,6 +65,9 @@ export default async function SettingsPage() {
   return (
     <div className="scroll-thin h-full overflow-y-auto p-4 sm:p-6 lg:p-8">
       <PageHeader title="Settings" />
+      <div className="mx-auto mb-4 max-w-3xl">
+        <PlanCard plan={plan} activeChats={activeChats} />
+      </div>
       <SettingsForm
         settings={settings}
         llm={{ ...llmStatus, keyCount: groqKeyCount }}

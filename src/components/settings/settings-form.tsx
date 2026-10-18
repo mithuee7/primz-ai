@@ -1,23 +1,24 @@
 "use client";
 
-import { CheckCircle2, KeyRound, Loader2, RefreshCw, Trash2 } from "lucide-react";
+import { KeyRound, Loader2, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   clearGroqKeyAction,
   clearApifyKeyAction,
   checkApifyBalanceAction,
   connectInstagramAction,
   disconnectInstagramAction,
+  listModelsAction,
   refreshInstagramTokenAction,
   saveGroqKeyAction,
   saveApifyKeyAction,
   saveSettingsAction,
-  deleteLeadAction,
+  saveAiProviderAction,
 } from "@/app/actions";
 import { Badge, Button, Card } from "@/components/ui/primitives";
 import { CONTACT_EMAIL, SETUP_PRICE_INR } from "@/lib/contact";
-import { saveAiProviderAction } from "@/app/actions";
+import type { AiProvider } from "@/lib/services/llm/provider-types";
 import { TONES, TONE_LABELS, type PublicAppSettings, type Tone } from "@/lib/types";
 import { KeyManager } from "./key-manager";
 
@@ -41,30 +42,70 @@ function Section({ title, description, children }: { title: string; description?
   );
 }
 
-const PROVIDER_CHOICES: { id: "groq" | "openai" | "anthropic" | "gemini"; label: string; defaultModel: string; hint: string }[] = [
-  { id: "groq", label: "Groq", defaultModel: "qwen/qwen3-32b", hint: "Uses your Groq keys above." },
-  { id: "openai", label: "OpenAI", defaultModel: "gpt-4o-mini", hint: "Needs an OpenAI API key with billing enabled." },
-  { id: "anthropic", label: "Anthropic (Claude)", defaultModel: "claude-3-5-haiku-latest", hint: "Needs an Anthropic API key." },
-  { id: "gemini", label: "Google Gemini", defaultModel: "gemini-2.0-flash", hint: "Needs a Gemini API key from Google AI Studio." },
+/** Suggested model per provider. Mirrors PROVIDER_DEFAULT_MODEL on the server. */
+const DEFAULT_MODEL: Record<AiProvider, string> = {
+  groq: "qwen/qwen3-32b",
+  openai: "gpt-4o-mini",
+  anthropic: "claude-3-5-haiku-latest",
+  gemini: "gemini-2.0-flash",
+};
+
+const PROVIDER_CHOICES: { id: AiProvider; label: string; hint: string }[] = [
+  { id: "groq", label: "Groq", hint: "Fast and affordable. Add your Groq keys below, then pick a model." },
+  { id: "openai", label: "OpenAI", hint: "Needs an OpenAI API key with billing enabled." },
+  { id: "anthropic", label: "Anthropic (Claude)", hint: "Needs an Anthropic API key." },
+  { id: "gemini", label: "Google Gemini", hint: "Needs a Gemini API key from Google AI Studio." },
 ];
 
-function AiProviderSection({ current }: { current: PublicAppSettings }) {
+function AiProviderSection({ current, groqKeyCount, groqLastFour }: { current: PublicAppSettings; groqKeyCount: number; groqLastFour: string | null }) {
   const router = useRouter();
-  const [provider, setProvider] = useState<"groq" | "openai" | "anthropic" | "gemini">(current.ai_provider);
+  const [provider, setProvider] = useState<AiProvider>(current.ai_provider as AiProvider);
   const choice = PROVIDER_CHOICES.find((c) => c.id === provider)!;
-  const [model, setModel] = useState(current.ai_model ?? choice.defaultModel);
+  const initialModel = provider === "groq" ? current.groq_model : current.ai_model ?? DEFAULT_MODEL[provider];
+  const [model, setModel] = useState(initialModel);
   const [key, setKey] = useState("");
+  const [models, setModels] = useState<string[]>([]);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+  const [loadingModels, setLoadingModels] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
 
-  const pick = (id: "groq" | "openai" | "anthropic" | "gemini") => {
+  const savedForThis = provider === "groq" ? groqKeyCount > 0 : current.ai_key_saved && current.ai_provider === provider;
+
+  const loadModels = (typedKey?: string) => {
+    setLoadingModels(true);
+    setModelsError(null);
+    listModelsAction({ provider, key: typedKey ?? "" }).then((res) => {
+      setLoadingModels(false);
+      if (res.ok) {
+        setModels(res.data ?? []);
+        if (res.data?.length && !res.data.includes(model)) setModel(res.data[0]!);
+      } else {
+        setModels([]);
+        setModelsError(res.error);
+      }
+    });
+  };
+
+  // Load the dropdown when the provider is chosen, or when a saved key changes.
+  useEffect(() => {
+    if (savedForThis) loadModels();
+    else setModels([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider, savedForThis, groqKeyCount]);
+
+  const pick = (id: AiProvider) => {
     setProvider(id);
-    setModel(PROVIDER_CHOICES.find((c) => c.id === id)!.defaultModel);
+    setModel(id === "groq" ? current.groq_model : current.ai_model ?? DEFAULT_MODEL[id]);
+    setKey("");
+    setModels([]);
     setMsg(null);
   };
 
+  const modelOptions = models.includes(model) || !model ? models : [model, ...models];
+
   return (
-    <Section title="AI provider" description="Groq is the default. You can also use your own OpenAI, Claude or Gemini key. Your key is stored encrypted and never shown again.">
+    <Section title="AI provider" description="Groq is the default. You can also use your own OpenAI, Claude or Gemini key. Keys are stored encrypted and never shown again.">
       <div className="flex flex-wrap gap-1.5">
         {PROVIDER_CHOICES.map((c) => (
           <button key={c.id} type="button" aria-pressed={provider === c.id} onClick={() => pick(c.id)} className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${provider === c.id ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 hover:bg-zinc-50"}`}>
@@ -73,25 +114,70 @@ function AiProviderSection({ current }: { current: PublicAppSettings }) {
         ))}
       </div>
       <p className="text-xs text-zinc-500">{choice.hint}</p>
-      {provider !== "groq" ? (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="ai-key" className="label">{choice.label} API key</label>
-            <input id="ai-key" type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} placeholder={current.ai_key_saved && current.ai_provider === provider ? `Saved (ends ${current.ai_key_last4 ?? "····"}). Paste to replace` : "Paste your key"} className="field" />
-          </div>
-          <div>
-            <label htmlFor="ai-model" className="label">Model</label>
-            <input id="ai-model" value={model} onChange={(e) => setModel(e.target.value)} className="field" />
-          </div>
+
+      {provider === "groq" ? (
+        <KeyManager
+          keyType="groq"
+          currentKeys={[]}
+          lastFour={groqLastFour}
+          keyCount={groqKeyCount}
+          onSave={saveGroqKeyAction}
+          onClear={clearGroqKeyAction}
+          label="Groq API Keys"
+          description="Supports multiple keys. Each one you add rotates to avoid rate limits. Stored encrypted, never shown again."
+        />
+      ) : (
+        <div>
+          <label htmlFor="ai-key" className="label">{choice.label} API key</label>
+          <input
+            id="ai-key"
+            type="password"
+            autoComplete="off"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            onBlur={() => { if (key.trim().length >= 10) loadModels(key.trim()); }}
+            placeholder={current.ai_key_saved && current.ai_provider === provider ? `Saved (ends ${current.ai_key_last4 ?? "····"}). Paste to replace` : "Paste your key"}
+            className="field"
+          />
         </div>
-      ) : null}
+      )}
+
+      <div>
+        <label htmlFor="ai-model" className="label">Model</label>
+        <select
+          id="ai-model"
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          disabled={loadingModels || modelOptions.length === 0}
+          className="field"
+        >
+          {modelOptions.length === 0 ? <option value={model}>{model || "—"}</option> : null}
+          {modelOptions.map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-zinc-500">
+          {loadingModels ? (
+            <span className="inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Loading the models your key can use…</span>
+          ) : modelsError ? (
+            <span className="text-red-700">{modelsError}</span>
+          ) : models.length === 0 ? (
+            provider === "groq" ? "Add a Groq key to load the models." : "Paste your key to load the models it can use."
+          ) : (
+            <button type="button" onClick={() => loadModels()} className="inline-flex items-center gap-1 text-zinc-600 underline-offset-2 hover:underline">
+              <RefreshCw className="h-3 w-3" /> Refresh list ({models.length} models)
+            </button>
+          )}
+        </p>
+      </div>
+
       <div className="flex flex-wrap items-center gap-3">
         <Button
-          disabled={pending || (provider !== "groq" && (key.trim().length < 10 || model.trim().length < 2))}
+          disabled={pending || !model || (provider !== "groq" && key.trim().length < 10)}
           onClick={() =>
             start(async () => {
               const res = await saveAiProviderAction({ provider, key, model });
-              setMsg(res.ok ? { ok: true, text: provider === "groq" ? "Using Groq." : `Saved. Replies now use ${choice.label}.` } : { ok: false, text: res.error });
+              setMsg(res.ok ? { ok: true, text: provider === "groq" ? "Saved. Replies use Groq with this model." : `Saved. Replies now use ${choice.label}.` } : { ok: false, text: res.error });
               if (res.ok) {
                 setKey("");
                 router.refresh();
@@ -101,21 +187,34 @@ function AiProviderSection({ current }: { current: PublicAppSettings }) {
         >
           {provider === "groq" ? "Use Groq" : `Save ${choice.label}`}
         </Button>
-        {msg ? <span className={`text-sm ${msg.ok ? "text-emerald-700" : "text-red-700"}`}>{msg.text}</span> : null}
+        {msg ? <span role="status" className={`text-sm ${msg.ok ? "text-emerald-700" : "text-red-700"}`}>{msg.text}</span> : null}
       </div>
     </Section>
   );
 }
 
+/** The done-for-you offer. The price is shown only after the person asks for it. */
 function SetupOffer({ what }: { what: string }) {
+  const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-zinc-300 bg-zinc-50/60 p-4">
-      <p className="text-sm text-zinc-600">
-        Don&apos;t want to set up {what} yourself? We&apos;ll generate and connect it for you for <span className="font-semibold text-zinc-900">₹{SETUP_PRICE_INR}</span>.
-      </p>
-      <a href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("Setup: " + what)}`} className="rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition-all hover:bg-zinc-800 active:scale-[0.97]">
-        Request setup
-      </a>
+      {open ? (
+        <>
+          <p className="text-sm text-zinc-600">
+            We&apos;ll generate and connect {what} for you for <span className="font-semibold text-zinc-900">₹{SETUP_PRICE_INR}</span>.
+          </p>
+          <a href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("Setup: " + what)}`} className="rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition-all hover:bg-zinc-800 active:scale-[0.97]">
+            Request setup
+          </a>
+        </>
+      ) : (
+        <>
+          <p className="text-sm text-zinc-600">Don&apos;t want to set up {what} yourself?</p>
+          <button type="button" onClick={() => setOpen(true)} className="rounded-full border border-zinc-300 bg-white px-4 py-2 text-xs font-semibold text-zinc-900 transition-all hover:bg-zinc-50 active:scale-[0.97]">
+            Get it done for you
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -129,10 +228,6 @@ export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, day
   const [customTone, setCustomTone] = useState(settings.default_custom_tone ?? "");
   const [behavior, setBehavior] = useState(settings.default_ai_behavior);
   const [global, setGlobal] = useState(settings.global_instructions);
-  const [model, setModel] = useState(settings.groq_model);
-  const [checkerModel, setCheckerModel] = useState(settings.checker_model);
-  const [minConf, setMinConf] = useState(settings.checker_min_confidence);
-  const [key, setKey] = useState("");
   const [igToken, setIgToken] = useState("");
   const [igSecret, setIgSecret] = useState("");
 
@@ -143,36 +238,11 @@ export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, day
 
   return (
     <div className="mx-auto grid max-w-3xl gap-4">
-      <Section title="Groq" description="Used for both the conversation AI and the output checker. Supports multiple API keys to distribute load and avoid rate limits.">
-        <KeyManager
-          keyType="groq"
-          currentKeys={[]}
-          lastFour={settings.groq_key_last4}
-          keyCount={llm.keyCount || 0}
-          onSave={saveGroqKeyAction}
-          onClear={clearGroqKeyAction}
-          label="Groq API Keys"
-          description="Supports multiple keys - each one you add will rotate to avoid rate limits. Stored encrypted, never shown again."
-        />
-        <div className="grid gap-4 sm:grid-cols-2 mt-4">
-          <div>
-            <label htmlFor="model" className="label">Conversation model</label>
-            <input id="model" value={model} onChange={(e) => setModel(e.target.value)} className="field" />
-          </div>
-          <div>
-            <label htmlFor="cmodel" className="label">Checker model</label>
-            <input id="cmodel" value={checkerModel} onChange={(e) => setCheckerModel(e.target.value)} className="field" />
-          </div>
-        </div>
-        <div>
-          <label htmlFor="conf" className="label">Checker minimum confidence: {minConf.toFixed(2)}</label>
-          <input id="conf" type="range" min={0.5} max={1} step={0.01} value={minConf} onChange={(e) => setMinConf(Number(e.target.value))} className="w-full accent-zinc-900" />
-          <p className="mt-1 text-xs text-zinc-500">Approvals below this confidence are treated as rejections. Higher is safer.</p>
-        </div>
-        <SetupOffer what="your Groq key" />
-      </Section>
-
-      <AiProviderSection current={settings} />
+      <AiProviderSection
+        current={settings}
+        groqKeyCount={llm.keyCount || 0}
+        groqLastFour={settings.groq_key_last4}
+      />
 
       <Section title="Apify" description="Used for auto-detecting lead type from Instagram bio and recent posts.">
         <KeyManager
@@ -186,7 +256,6 @@ export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, day
           label="Apify API Keys"
           description="Fetch Instagram profile info (bio, posts) for automatic lead type detection. Supports multiple keys."
         />
-        <SetupOffer what="your Apify key" />
       </Section>
 
       <Section title="Instagram connection" description="Paste your Instagram access token and app secret. They are stored encrypted and never shown again.">
@@ -240,6 +309,7 @@ export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, day
               <code className="block break-all rounded bg-white px-2 py-1">{settings.meta_verify_token ?? "Appears after you connect"}</code>
               <p className="mt-2">Subscribe to the <b>messages</b> field.</p>
             </div>
+            <SetupOffer what="your Instagram API connection" />
           </>
         )}
       </Section>
@@ -280,9 +350,9 @@ export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, day
                   default_custom_tone: tone === "custom" ? customTone.trim() || null : null,
                   default_ai_behavior: behavior,
                   global_instructions: global,
-                  groq_model: model,
-                  checker_model: checkerModel,
-                  checker_min_confidence: minConf,
+                  groq_model: settings.groq_model,
+                  checker_model: settings.checker_model,
+                  checker_min_confidence: settings.checker_min_confidence,
                 }),
                 "Settings saved.",
               ),

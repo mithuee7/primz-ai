@@ -10,6 +10,9 @@ export interface PlanState {
   active: boolean;
   chatsPerAccount: number;
   name: string;
+  requestedAt: string | null;
+  activatedAt: string | null;
+  expiresAt: string | null;
 }
 
 /** Platform keys the owner provides for the Basic plan. Set as secrets: BASIC_GROQ_KEYS, BASIC_APIFY_KEYS (comma separated). */
@@ -26,10 +29,16 @@ export async function getPlanState(ownerId: string): Promise<PlanState> {
   const db = createAdminClient();
   const { data } = await db
     .from("user_plans")
-    .select("plan_code, status, expires_at")
+    .select("plan_code, status, requested_at, activated_at, expires_at")
     .eq("owner_id", ownerId)
     .maybeSingle();
-  const row = data as { plan_code: string; status: PlanState["status"]; expires_at: string | null } | null;
+  const row = data as {
+    plan_code: string;
+    status: PlanState["status"];
+    requested_at: string | null;
+    activated_at: string | null;
+    expires_at: string | null;
+  } | null;
   const code = row?.plan_code ?? "free";
   const status = row?.status ?? "inactive";
   const notExpired = !row?.expires_at || new Date(row.expires_at).getTime() > Date.now();
@@ -40,6 +49,9 @@ export async function getPlanState(ownerId: string): Promise<PlanState> {
     active: status === "active" && notExpired && Boolean(plan),
     chatsPerAccount: plan?.chatsPerAccount ?? 0,
     name: plan?.name ?? "No plan",
+    requestedAt: row?.requested_at ?? null,
+    activatedAt: row?.activated_at ?? null,
+    expiresAt: row?.expires_at ?? null,
   };
 }
 

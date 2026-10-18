@@ -1,7 +1,8 @@
 import "server-only";
 import { LLMError, type LLMClient, type LLMRequest } from "./types";
 
-export type AiProvider = "groq" | "openai" | "anthropic" | "gemini";
+export type { AiProvider } from "./provider-types";
+import type { AiProvider } from "./provider-types";
 export const CUSTOM_PROVIDERS: AiProvider[] = ["openai", "anthropic", "gemini"];
 
 export const PROVIDER_DEFAULT_MODEL: Record<AiProvider, string> = {

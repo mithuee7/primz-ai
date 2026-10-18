@@ -4,7 +4,9 @@ import { AutoBadge, InterestIndicator, StageBadge } from "@/components/chats/ind
 import { AutoRefresh } from "@/components/shell/auto-refresh";
 import { Avatar, Card, EmptyState, PageHeader } from "@/components/ui/primitives";
 import { dashboardStats } from "@/lib/conversation-filters";
+import { PlanCard } from "@/components/plan/plan-card";
 import { requireUser } from "@/lib/auth";
+import { getPlanState } from "@/lib/plan-state";
 import { getRepository } from "@/lib/repo";
 import { timeAgo } from "@/lib/utils";
 
@@ -14,6 +16,8 @@ export default async function DashboardPage() {
   const user = await requireUser();
   const conversations = await getRepository().listConversations(user.id);
   const stats = dashboardStats(conversations);
+  const plan = await getPlanState(user.id);
+  const activeChats = conversations.filter((c) => c.settings.auto_chat_enabled).length;
 
   const cards = [
     { label: "Total conversations", value: stats.total, icon: MessageSquare, href: "/chats" },
@@ -29,6 +33,9 @@ export default async function DashboardPage() {
     <div className="scroll-thin h-full overflow-y-auto p-4 sm:p-6 lg:p-8">
       <AutoRefresh intervalMs={10000} />
       <PageHeader title="Dashboard" description="Where your conversations stand right now." />
+      <div className="mb-6">
+        <PlanCard plan={plan} activeChats={activeChats} />
+      </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         {cards.map((c) => (

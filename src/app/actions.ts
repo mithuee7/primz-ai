@@ -3,7 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUserForAction } from "@/lib/auth";
-import { encryptForStorage } from "@/lib/secrets";
+import { encryptForStorage, tryDecrypt } from "@/lib/secrets";
+import { resolveGroqKey } from "@/lib/services/llm/resolve";
+import { listProviderModels } from "@/lib/services/llm/models";
+import { basicGroqKeys, getPlanState } from "@/lib/plan-state";
 import { isDemoMode } from "@/lib/env";
 import { getRepository } from "@/lib/repo";
 import { rateLimit } from "@/lib/rate-limit";
@@ -207,7 +210,14 @@ export async function saveAiProviderAction(input: unknown): Promise<ActionResult
     const parsed = aiProviderInput.parse(input);
     const repo = getRepository();
     if (parsed.provider === "groq") {
-      await repo.saveAppSettings(ownerId, { ai_provider: "groq", ai_key_encrypted: null, ai_key_last4: null, ai_model: null });
+      const model = (parsed.model ?? "").trim();
+      await repo.saveAppSettings(ownerId, {
+        ai_provider: "groq",
+        ai_key_encrypted: null,
+        ai_key_last4: null,
+        ai_model: null,
+        ...(model.length >= 2 ? { groq_model: model } : {}),
+      });
       return;
     }
     const key = (parsed.key ?? "").trim();
@@ -220,6 +230,35 @@ export async function saveAiProviderAction(input: unknown): Promise<ActionResult
       ai_key_last4: key.slice(-4),
       ai_model: model,
     });
+  });
+}
+
+/**
+ * Models the owner's key can use, for the Model dropdown. Uses the key typed in the form when
+ * given, otherwise the key already saved for that provider.
+ */
+export async function listModelsAction(input: unknown): Promise<ActionResult<string[]>> {
+  return guarded("listModels", async (ownerId) => {
+    const parsed = z
+      .object({ provider: z.enum(["groq", "openai", "anthropic", "gemini"]), key: z.string().max(500).optional() })
+      .parse(input);
+    const typed = (parsed.key ?? "").trim();
+    let key = typed;
+    if (!key) {
+      const settings = await getRepository().getAppSettings(ownerId);
+      if (parsed.provider === "groq") {
+        key = resolveGroqKey(settings).keys[0] ?? "";
+        // Basic plans run on the platform's Groq keys, so the list still loads for them.
+        if (!key) {
+          const plan = await getPlanState(ownerId);
+          if (plan.active && plan.code === "basic") key = basicGroqKeys()[0] ?? "";
+        }
+      } else if (settings.ai_provider === parsed.provider) {
+        key = tryDecrypt(settings.ai_key_encrypted) ?? "";
+      }
+    }
+    if (!key) throw new Error("Add your key first, then the models will load.");
+    return listProviderModels(parsed.provider, key);
   });
 }
 
