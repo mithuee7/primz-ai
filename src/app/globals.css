@@ -13,7 +13,34 @@ body {
 
 body {
   @apply bg-zinc-50 text-zinc-900 antialiased;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-feature-settings: "cv11", "ss01";
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Motion: soft entrance and hover lift. Disabled for people who ask for less motion. */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.animate-fade-up { animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-fade-in { animation: fade-in 0.9s ease-out both; }
+.animate-float { animation: float-slow 7s ease-in-out infinite; }
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.lift { transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease; }
+.lift:hover { transform: translateY(-2px); box-shadow: 0 12px 32px -12px rgb(24 24 27 / 0.18); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
 /* Comfortable tap targets and no iOS zoom-on-focus */

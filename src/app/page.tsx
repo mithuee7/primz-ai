@@ -1,114 +1,138 @@
 import Link from "next/link";
 import { DemoChat } from "@/components/landing/demo-chat";
-import { PLANS, SETUP_SERVICES } from "@/lib/plans";
+import { PlanBuyButton } from "@/components/landing/plan-buy";
+import { ScrollLink } from "@/components/landing/scroll-link";
+import { CONTACT_EMAIL, CONTACT_INSTAGRAM, CONTACT_INSTAGRAM_URL } from "@/lib/contact";
+import { PLANS } from "@/lib/plans";
 
-export const metadata = { title: "Primz AI · Instagram DM assistant" };
+export const metadata = { title: "Primz AI · Turn Instagram leads into calls" };
 
 const FEATURES = [
-  { title: "Replies in seconds", body: "Every new DM gets a fast, natural reply, including at night and on weekends." },
-  { title: "Knows when to pitch", body: "Warm conversations get your service pitched at the right moment, with a soft next step." },
-  { title: "Safety checks", body: "A second AI reviews each reply before it's sent. Anything unclear is held for you." },
-  { title: "You stay in control", body: "Take over any chat, edit replies, and see every decision in the logs." },
+  { title: "Replies in seconds", body: "A lead's message gets a natural, on-brand reply the moment it arrives, day or night." },
+  { title: "Qualifies while it talks", body: "It asks the right question, learns the lead's problem, and only pitches when there is a real fit." },
+  { title: "Checked before it's sent", body: "A second AI reviews every reply. Anything unclear is held for you instead of going out." },
+  { title: "You stay in control", body: "Take over any chat, edit a reply, and see every decision in a clear activity log." },
 ];
 
 const STEPS = [
-  "Connect your Instagram account and add your services.",
-  "Choose how the AI should sound and what it may say.",
-  "Turn on auto-replies. Leads get answered, and hot ones are flagged for a call.",
+  { n: "01", title: "Connect Instagram", body: "Link your account and add the services you sell." },
+  { n: "02", title: "Set the voice", body: "Choose the tone and the limits. The AI never goes beyond what you allow." },
+  { n: "03", title: "Let it reply", body: "Leads get answered instantly. The hot ones land on your calendar." },
 ];
 
 export default function LandingPage() {
   return (
-    <main className="min-h-dvh bg-white text-zinc-900">
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-5 py-5">
-        <span className="text-base font-semibold tracking-tight">Primz AI</span>
-        <nav className="flex items-center gap-4 text-sm">
-          <a href="#plans" className="text-zinc-600 hover:text-zinc-900">Plans</a>
-          <a href="#demo" className="text-zinc-600 hover:text-zinc-900">Demo</a>
-          <Link href="/login" className="rounded-full bg-zinc-900 px-4 py-2 font-medium text-white">Sign in</Link>
-        </nav>
+    <main className="min-h-dvh overflow-x-hidden bg-[#fafafa] text-zinc-900">
+      {/* Nav */}
+      <header className="sticky top-0 z-30 border-b border-zinc-200/60 bg-white/70 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+          <span className="text-[15px] font-semibold tracking-tight">Primz AI</span>
+          <nav className="flex items-center gap-6 text-sm">
+            <ScrollLink target="features" className="hidden text-zinc-600 transition-colors hover:text-zinc-900 sm:inline">Features</ScrollLink>
+            <ScrollLink target="plans" className="text-zinc-600 transition-colors hover:text-zinc-900">Pricing</ScrollLink>
+            <a href={`mailto:${CONTACT_EMAIL}`} className="text-zinc-600 transition-colors hover:text-zinc-900">Contact</a>
+            <Link href="/login" className="rounded-full bg-zinc-900 px-4 py-2 font-semibold text-white transition-all hover:bg-zinc-800 active:scale-[0.97]">Sign in</Link>
+          </nav>
+        </div>
       </header>
 
-      <section className="mx-auto grid max-w-6xl gap-10 px-5 pb-16 pt-6 lg:grid-cols-2 lg:items-center lg:pt-14">
-        <div>
-          <p className="text-sm font-medium text-blue-600">Instagram DM automation</p>
-          <h1 className="mt-3 text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
-            Never leave a lead on read again.
-          </h1>
-          <p className="mt-5 text-lg text-zinc-600">
-            Primz AI answers your Instagram DMs in your own voice, qualifies leads, and pitches your service when the moment is right. You get the calls, not the inbox.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/login" className="rounded-full bg-zinc-900 px-6 py-3 text-sm font-medium text-white">Get started</Link>
-            <a href="#plans" className="rounded-full border border-zinc-300 px-6 py-3 text-sm font-medium">See plans</a>
+      {/* Hero */}
+      <section className="relative">
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 -top-40 mx-auto h-[520px] max-w-4xl rounded-full bg-gradient-to-br from-blue-200/50 via-fuchsia-200/40 to-amber-200/40 blur-3xl" />
+        <div className="relative mx-auto grid max-w-6xl gap-14 px-6 pb-24 pt-16 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:pt-24">
+          <div>
+            <h1 className="animate-fade-up text-5xl font-semibold leading-[1.05] tracking-[-0.035em] sm:text-6xl">
+              Turn Instagram leads into <span className="bg-gradient-to-r from-blue-600 to-fuchsia-600 bg-clip-text text-transparent">booked calls</span>, in seconds.
+            </h1>
+            <p className="animate-fade-up delay-100 mt-6 max-w-xl text-lg leading-relaxed text-zinc-600">
+              Most leads go cold waiting for a reply. Primz AI answers every DM the moment it lands, qualifies the lead, and pitches your service when it fits.
+            </p>
+            <div className="animate-fade-up delay-200 mt-10 flex flex-wrap items-center gap-3">
+              <Link href="/login" className="rounded-full bg-zinc-900 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-zinc-900/25 transition-all hover:-translate-y-0.5 hover:bg-zinc-800 active:scale-[0.98]">
+                Get started
+              </Link>
+              <ScrollLink target="plans" className="rounded-full border border-zinc-300 bg-white px-7 py-3.5 text-sm font-semibold text-zinc-900 transition-all hover:-translate-y-0.5 hover:border-zinc-400">
+                View pricing
+              </ScrollLink>
+            </div>
           </div>
-        </div>
-        <div id="demo">
-          <DemoChat />
-        </div>
-      </section>
-
-      <section className="bg-zinc-50 py-16">
-        <div className="mx-auto max-w-6xl px-5">
-          <h2 className="text-2xl font-semibold tracking-tight">What it does</h2>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {FEATURES.map((f) => (
-              <div key={f.title} className="rounded-2xl bg-white p-5 ring-1 ring-zinc-200">
-                <h3 className="font-semibold">{f.title}</h3>
-                <p className="mt-2 text-sm text-zinc-600">{f.body}</p>
-              </div>
-            ))}
+          <div className="animate-fade-up delay-300 animate-float">
+            <DemoChat />
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-5 py-16">
-        <h2 className="text-2xl font-semibold tracking-tight">How it works</h2>
-        <ol className="mt-8 grid gap-4 md:grid-cols-3">
-          {STEPS.map((s, i) => (
-            <li key={s} className="rounded-2xl bg-zinc-50 p-5">
-              <span className="text-sm font-semibold text-blue-600">Step {i + 1}</span>
-              <p className="mt-2 text-sm text-zinc-700">{s}</p>
-            </li>
+      {/* Features */}
+      <section id="features" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-24">
+        <p className="text-sm font-semibold text-blue-600">Why it works</p>
+        <h2 className="mt-3 max-w-2xl text-4xl font-semibold tracking-[-0.03em]">Every lead gets an answer. Your time goes to the calls.</h2>
+        <div className="mt-14 grid gap-5 sm:grid-cols-2">
+          {FEATURES.map((f) => (
+            <div key={f.title} className="lift rounded-3xl border border-zinc-200/80 bg-white p-8">
+              <h3 className="text-xl font-semibold tracking-tight">{f.title}</h3>
+              <p className="mt-3 leading-relaxed text-zinc-600">{f.body}</p>
+            </div>
           ))}
-        </ol>
-      </section>
-
-      <section id="plans" className="bg-zinc-50 py-16">
-        <div className="mx-auto max-w-6xl px-5">
-          <h2 className="text-2xl font-semibold tracking-tight">Plans</h2>
-          <p className="mt-2 text-sm text-zinc-600">Every plan includes all features. Pricing for Basic to Business is shown on request for now.</p>
-          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {PLANS.map((p) => (
-              <div key={p.code} className="flex flex-col rounded-2xl bg-white p-6 ring-1 ring-zinc-200">
-                <h3 className="text-lg font-semibold">{p.name}</h3>
-                <p className="mt-2 text-2xl font-semibold">{p.price ?? "On request"}</p>
-                <ul className="mt-5 flex-1 space-y-2 text-sm text-zinc-700">
-                  {p.highlights.map((h) => (
-                    <li key={h}>• {h}</li>
-                  ))}
-                </ul>
-                <p className="mt-5 border-t border-zinc-100 pt-4 text-xs text-zinc-500">{p.keys}</p>
-              </div>
-            ))}
-          </div>
-
-          <h3 className="mt-14 text-lg font-semibold">Done-for-you setup</h3>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            {SETUP_SERVICES.map((s) => (
-              <div key={s.name} className="rounded-2xl bg-white p-6 ring-1 ring-zinc-200">
-                <p className="font-semibold">{s.name}</p>
-                <p className="mt-1 text-2xl font-semibold">{s.price}</p>
-                <p className="mt-2 text-sm text-zinc-600">{s.detail}</p>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
-      <footer className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-10 text-sm text-zinc-500">
-        <span>Primz AI</span>
-        <Link href="/login" className="hover:text-zinc-900">Sign in</Link>
+      {/* How it works */}
+      <section className="bg-zinc-950 py-24 text-white">
+        <div className="mx-auto max-w-6xl px-6">
+          <p className="text-sm font-semibold text-amber-300">How it works</p>
+          <h2 className="mt-3 text-4xl font-semibold tracking-[-0.03em]">Up and running in an afternoon.</h2>
+          <ol className="mt-14 grid gap-10 md:grid-cols-3">
+            {STEPS.map((s) => (
+              <li key={s.n}>
+                <span className="text-sm font-semibold text-zinc-500">{s.n}</span>
+                <h3 className="mt-3 text-xl font-semibold tracking-tight">{s.title}</h3>
+                <p className="mt-2 leading-relaxed text-zinc-400">{s.body}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      {/* Plans */}
+      <section id="plans" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-24">
+        <p className="text-sm font-semibold text-blue-600">Pricing</p>
+        <h2 className="mt-3 text-4xl font-semibold tracking-[-0.03em]">Simple plans. Cancel anytime.</h2>
+        <div className="mt-14 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+          {PLANS.map((p) => (
+            <div key={p.code} className={`lift flex flex-col rounded-3xl border bg-white p-7 ${p.featured ? "border-zinc-900 ring-1 ring-zinc-900" : "border-zinc-200/80"}`}>
+              {p.featured ? <span className="mb-4 w-fit rounded-full bg-zinc-900 px-3 py-1 text-xs font-semibold text-white">Most popular</span> : null}
+              <h3 className="text-3xl font-semibold tracking-[-0.02em]">{p.name}</h3>
+              <p className="mt-4 flex items-baseline gap-1">
+                <span className="text-4xl font-semibold tracking-tight">₹{p.price.toLocaleString("en-IN")}</span>
+                <span className="text-sm text-zinc-500">/ month</span>
+              </p>
+              <ul className="mt-7 flex-1 space-y-3 text-sm text-zinc-700">
+                {p.highlights.map((h) => (
+                  <li key={h} className="flex gap-2"><span className="text-blue-600">•</span>{h}</li>
+                ))}
+                <li className="flex gap-2"><span className="text-blue-600">•</span>{p.keys}</li>
+              </ul>
+              <div className="mt-8">
+                <PlanBuyButton name={p.name} featured={p.featured} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-zinc-200 bg-white">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-6 px-6 py-10 text-sm">
+          <div>
+            <p className="font-semibold">Primz AI</p>
+            <p className="mt-1 text-zinc-500">Built to turn conversations into calls.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <a href={`mailto:${CONTACT_EMAIL}`} className="rounded-full border border-zinc-300 px-5 py-2.5 font-semibold transition-all hover:-translate-y-0.5 hover:border-zinc-400">Email us</a>
+            <a href={CONTACT_INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="rounded-full border border-zinc-300 px-5 py-2.5 font-semibold transition-all hover:-translate-y-0.5 hover:border-zinc-400">@{CONTACT_INSTAGRAM}</a>
+            <Link href="/privacy" className="px-2 text-zinc-500 hover:text-zinc-900">Privacy</Link>
+          </div>
+        </div>
       </footer>
     </main>
   );

@@ -16,6 +16,7 @@ import {
   deleteLeadAction,
 } from "@/app/actions";
 import { Badge, Button, Card } from "@/components/ui/primitives";
+import { CONTACT_EMAIL, SETUP_PRICE_INR } from "@/lib/contact";
 import { TONES, TONE_LABELS, type PublicAppSettings, type Tone } from "@/lib/types";
 import { KeyManager } from "./key-manager";
 
@@ -36,6 +37,19 @@ function Section({ title, description, children }: { title: string; description?
       {description ? <p className="mt-0.5 text-sm text-zinc-500">{description}</p> : null}
       <div className="mt-4 space-y-4">{children}</div>
     </Card>
+  );
+}
+
+function SetupOffer({ what }: { what: string }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-zinc-300 bg-zinc-50/60 p-4">
+      <p className="text-sm text-zinc-600">
+        Don&apos;t want to set up {what} yourself? We&apos;ll generate and connect it for you for <span className="font-semibold text-zinc-900">₹{SETUP_PRICE_INR}</span>.
+      </p>
+      <a href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("Setup: " + what)}`} className="rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition-all hover:bg-zinc-800 active:scale-[0.97]">
+        Request setup
+      </a>
+    </div>
   );
 }
 
@@ -88,6 +102,7 @@ export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, day
           <input id="conf" type="range" min={0.5} max={1} step={0.01} value={minConf} onChange={(e) => setMinConf(Number(e.target.value))} className="w-full accent-zinc-900" />
           <p className="mt-1 text-xs text-zinc-500">Approvals below this confidence are treated as rejections. Higher is safer.</p>
         </div>
+        <SetupOffer what="your Groq key" />
       </Section>
 
       <Section title="Apify" description="Used for auto-detecting lead type from Instagram bio and recent posts.">
@@ -102,6 +117,7 @@ export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, day
           label="Apify API Keys"
           description="Fetch Instagram profile info (bio, posts) for automatic lead type detection. Supports multiple keys."
         />
+        <SetupOffer what="your Apify key" />
       </Section>
 
       <Section title="Instagram connection" description="Paste your Instagram access token and app secret. They are stored encrypted and never shown again.">

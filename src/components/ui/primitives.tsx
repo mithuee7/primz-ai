@@ -4,11 +4,11 @@ import { cn, initials } from "@/lib/utils";
 
 /* ----------------------------------------------------------------- Button */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold tracking-tight transition-all duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
-        primary: "bg-zinc-900 text-white hover:bg-zinc-800",
+        primary: "bg-zinc-900 text-white shadow-sm shadow-zinc-900/20 hover:bg-zinc-800 hover:shadow-md",
         secondary: "border border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50",
         ghost: "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900",
         danger: "bg-red-600 text-white hover:bg-red-700",
@@ -53,7 +53,7 @@ export function Badge({ tone = "neutral", className, ...props }: HTMLAttributes<
 
 /* ------------------------------------------------------------------- Card */
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("rounded-2xl border border-zinc-200 bg-white", className)} {...props} />;
+  return <div className={cn("rounded-2xl border border-zinc-200/80 bg-white shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_-12px_rgb(0_0_0/0.08)]", className)} {...props} />;
 }
 
 /* ----------------------------------------------------------------- Avatar */
@@ -96,7 +96,7 @@ export function PageHeader({ title, description, actions }: { title: string; des
   return (
     <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-zinc-900 sm:text-2xl">{title}</h1>
+        <h1 className="text-2xl font-semibold tracking-[-0.02em] text-zinc-900 sm:text-3xl">{title}</h1>
         {description ? <p className="mt-1 text-sm text-zinc-500">{description}</p> : null}
       </div>
       {actions}
