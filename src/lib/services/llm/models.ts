@@ -20,7 +20,7 @@ async function getJson(url: string, headers: Record<string, string>): Promise<un
   }
 }
 
-const NON_CHAT = /whisper|tts|guard|embed|moderation|dall|image|audio|realtime|transcribe|search|orpheus/i;
+const NON_CHAT = /whisper|tts|guard|embed|moderation|dall|audio|realtime|transcribe|orpheus|rerank/i;
 
 /** Model ids the given key can use, sorted. Chat-capable models only. */
 export async function listProviderModels(provider: AiProvider, apiKey: string): Promise<string[]> {

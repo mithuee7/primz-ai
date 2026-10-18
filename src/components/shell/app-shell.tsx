@@ -6,6 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { signOutAction } from "@/app/actions";
 import { Avatar } from "@/components/ui/primitives";
+import { PlanMini } from "@/components/plan/plan-mini";
+import type { PlanState } from "@/lib/plan-state";
 import { cn } from "@/lib/utils";
 import { MOBILE_TAB_HREFS, NAV_ITEMS } from "./nav";
 
@@ -13,6 +15,7 @@ export interface ShellProps {
   user: { name: string; email: string; demo: boolean };
   instagram: { connected: boolean; label: string; detail: string };
   reviewCount: number;
+  plan: { state: PlanState; activeChats: number } | null;
   children: React.ReactNode;
 }
 
@@ -53,11 +56,12 @@ function NavLinks({ reviewCount, onNavigate }: { reviewCount: number; onNavigate
   );
 }
 
-function SidebarFooter({ user, instagram, onNavigate }: Pick<ShellProps, "user" | "instagram"> & { onNavigate?: () => void }) {
+function SidebarFooter({ user, instagram, plan, onNavigate }: Pick<ShellProps, "user" | "instagram" | "plan"> & { onNavigate?: () => void }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   return (
     <div className="space-y-3 border-t border-white/10 p-3">
+      {plan ? <PlanMini plan={plan.state} activeChats={plan.activeChats} /> : null}
       <div className="rounded-xl bg-white/5 px-3 py-2.5" title={instagram.detail}>
         <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
           <span className={cn("h-2 w-2 rounded-full", instagram.connected ? "bg-emerald-400" : "bg-amber-400")} />
@@ -95,7 +99,7 @@ function SidebarFooter({ user, instagram, onNavigate }: Pick<ShellProps, "user" 
   );
 }
 
-export function AppShell({ user, instagram, reviewCount, children }: ShellProps) {
+export function AppShell({ user, instagram, reviewCount, plan, children }: ShellProps) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -108,7 +112,7 @@ export function AppShell({ user, instagram, reviewCount, children }: ShellProps)
   }, [open]);
 
   return (
-    <div className="flex h-dvh flex-col">
+    <div className="fixed inset-0 flex flex-col overflow-hidden">
       {user.demo ? (
         <div className="flex shrink-0 items-center justify-center gap-2 bg-amber-300 px-3 py-1.5 text-center text-xs font-medium text-zinc-900">
           <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Demo mode</span>
@@ -125,7 +129,7 @@ export function AppShell({ user, instagram, reviewCount, children }: ShellProps)
           <div className="flex-1 overflow-y-auto px-3 py-2">
             <NavLinks reviewCount={reviewCount} />
           </div>
-          <SidebarFooter user={user} instagram={instagram} />
+          <SidebarFooter user={user} instagram={instagram} plan={plan} />
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
@@ -170,7 +174,7 @@ export function AppShell({ user, instagram, reviewCount, children }: ShellProps)
             <div className="flex-1 overflow-y-auto px-3">
               <NavLinks reviewCount={reviewCount} onNavigate={() => setOpen(false)} />
             </div>
-            <SidebarFooter user={user} instagram={instagram} onNavigate={() => setOpen(false)} />
+            <SidebarFooter user={user} instagram={instagram} plan={plan} onNavigate={() => setOpen(false)} />
           </div>
         </div>
       ) : null}

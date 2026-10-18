@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { recoverUnansweredMessages } from "@/lib/services/ai/claims";
 import { ensureFreshInstagramToken } from "@/lib/services/instagram/token";
 import { getInstagramService } from "@/lib/services/instagram";
+import { getPlanState } from "@/lib/plan-state";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +24,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     getInstagramService(user.id).then((ig) => ig.getStatus()),
   ]);
   const reviewCount = conversations.filter((c) => c.state.needs_review).length;
+  const plan = user.demo ? null : { state: await getPlanState(user.id), activeChats: conversations.filter((c) => c.settings.auto_chat_enabled).length };
 
   return (
     <AppShell
       user={{ name: user.name, email: user.email, demo: user.demo }}
       instagram={{ connected: instagram.connected, label: instagram.label, detail: instagram.detail }}
       reviewCount={reviewCount}
+      plan={plan}
     >
       {children}
     </AppShell>

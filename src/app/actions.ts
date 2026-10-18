@@ -258,6 +258,20 @@ export async function listModelsAction(input: unknown): Promise<ActionResult<str
       }
     }
     if (!key) throw new Error("Add your key first, then the models will load.");
+    if (parsed.provider === "groq" && !typed) {
+      // Saved Groq keys: use the first one that Groq accepts, so one bad key doesn't hide the list.
+      const settings = await getRepository().getAppSettings(ownerId);
+      const candidates = [...new Set([...resolveGroqKey(settings).keys, ...basicGroqKeys()])];
+      let lastError: unknown = null;
+      for (const candidate of candidates) {
+        try {
+          return await listProviderModels("groq", candidate);
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      throw lastError instanceof Error ? lastError : new Error("Could not load the models.");
+    }
     return listProviderModels(parsed.provider, key);
   });
 }
