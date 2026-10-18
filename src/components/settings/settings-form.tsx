@@ -50,6 +50,11 @@ const DEFAULT_MODEL: Record<AiProvider, string> = {
   gemini: "gemini-2.0-flash",
 };
 
+/** Model marked "(recommended)" in the dropdown, per provider. */
+const RECOMMENDED_MODEL: Partial<Record<AiProvider, string>> = {
+  groq: "qwen/qwen3.8-27b",
+};
+
 const PROVIDER_CHOICES: { id: AiProvider; label: string; hint: string }[] = [
   { id: "groq", label: "Groq", hint: "Fast and affordable. Add your Groq keys below, then pick a model." },
   { id: "openai", label: "OpenAI", hint: "Needs an OpenAI API key with billing enabled." },
@@ -153,7 +158,7 @@ function AiProviderSection({ current, groqKeyCount, groqLastFour }: { current: P
         >
           {modelOptions.length === 0 ? <option value={model}>{model || "—"}</option> : null}
           {modelOptions.map((m) => (
-            <option key={m} value={m}>{m}</option>
+            <option key={m} value={m}>{m}{m === RECOMMENDED_MODEL[provider] ? " (recommended)" : ""}</option>
           ))}
         </select>
         <p className="mt-1 text-xs text-zinc-500">
