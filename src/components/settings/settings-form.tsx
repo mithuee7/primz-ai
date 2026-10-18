@@ -30,6 +30,7 @@ export interface SettingsViewProps {
   callbackUrl: string;
   daysLeft: number | null;
   demo: boolean;
+  planActive: boolean;
 }
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
@@ -224,7 +225,7 @@ function SetupOffer({ what }: { what: string }) {
   );
 }
 
-export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, daysLeft, demo }: SettingsViewProps) {
+export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, daysLeft, demo, planActive }: SettingsViewProps) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -263,6 +264,17 @@ export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, day
         />
       </Section>
 
+      {!planActive && instagram.kind === "meta" ? (
+        <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
+          <div>
+            <h2 className="text-sm font-semibold">Instagram connection</h2>
+            <p className="mt-0.5 text-sm text-zinc-500">Choose a plan to connect your Instagram account.</p>
+          </div>
+          <a href="/#plans" className="rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition-all hover:bg-zinc-800 active:scale-[0.97]">
+            Connect Instagram
+          </a>
+        </Card>
+      ) : (
       <Section title="Instagram connection" description="Paste your Instagram access token and app secret. They are stored encrypted and never shown again.">
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={instagram.connected ? "green" : "amber"}>{instagram.label}</Badge>
@@ -318,6 +330,7 @@ export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, day
           </>
         )}
       </Section>
+      )}
 
       <Section title="Defaults for new conversations">
         <div>

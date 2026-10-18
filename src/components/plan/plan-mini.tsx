@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { PlanState } from "@/lib/plan-state";
 
 /** Compact plan block for the sidebar. Shows the plan, status and chat usage. */
@@ -32,9 +31,9 @@ export function PlanMini({ plan, activeChats }: { plan: PlanState; activeChats: 
         <p className="mt-1 text-[11px] text-zinc-400">{plan.status === "pending" ? "We activate within 48 hours." : "Choose a plan to start."}</p>
       )}
       {!plan.active || reached ? (
-        <Link href="/#pricing" className="mt-2 inline-block text-[11px] font-semibold text-white underline-offset-2 hover:underline">
+        <a href="/#plans" className="mt-2 inline-block text-[11px] font-semibold text-white underline-offset-2 hover:underline">
           {plan.active ? "Upgrade" : "View plans"}
-        </Link>
+        </a>
       ) : null}
     </div>
   );

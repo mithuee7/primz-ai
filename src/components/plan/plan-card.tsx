@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Badge, Card } from "@/components/ui/primitives";
 import type { PlanState } from "@/lib/plan-state";
 
@@ -56,9 +55,9 @@ export function PlanCard({ plan, activeChats }: { plan: PlanState; activeChats: 
           <p className="mt-1 text-sm text-zinc-500">{detail}</p>
         </div>
         {!plan.active || reached || nearing ? (
-          <Link href="/#pricing" className="rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition-all hover:bg-zinc-800 active:scale-[0.97]">
+          <a href="/#plans" className="rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition-all hover:bg-zinc-800 active:scale-[0.97]">
             {plan.active ? "Upgrade plan" : "View plans"}
-          </Link>
+          </a>
         ) : null}
       </div>
 

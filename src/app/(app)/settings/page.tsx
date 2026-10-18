@@ -53,7 +53,7 @@ export default async function SettingsPage() {
   }
 
   const llmStatus = getLlmStatus(raw);
-  const plan = await getPlanState(user.id);
+  const plan = user.demo ? null : await getPlanState(user.id);
   const allConversations = await getRepository().listConversations(user.id);
   const activeChats = allConversations.filter((c) => c.settings.auto_chat_enabled).length;
 
@@ -65,9 +65,11 @@ export default async function SettingsPage() {
   return (
     <div className="scroll-thin h-full overflow-y-auto p-4 sm:p-6 lg:p-8">
       <PageHeader title="Settings" />
-      <div className="mx-auto mb-4 max-w-3xl">
-        <PlanCard plan={plan} activeChats={activeChats} />
-      </div>
+      {plan ? (
+        <div className="mx-auto mb-4 max-w-3xl">
+          <PlanCard plan={plan} activeChats={activeChats} />
+        </div>
+      ) : null}
       <SettingsForm
         settings={settings}
         llm={{ ...llmStatus, keyCount: groqKeyCount }}
@@ -76,6 +78,7 @@ export default async function SettingsPage() {
         callbackUrl={callbackUrl}
         daysLeft={daysLeft(raw.meta_token_expires_at)}
         demo={user.demo}
+        planActive={user.demo || Boolean(plan?.active)}
       />
     </div>
   );
