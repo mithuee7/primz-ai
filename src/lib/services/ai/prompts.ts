@@ -1,7 +1,7 @@
 import type { AppSettings, ConversationFull, Message, Service, Tone } from "@/lib/types";
 import { LEAD_TYPE_LABELS } from "@/lib/types";
 
-export const CONVERSATION_PROMPT_VERSION = "conversation-v2";
+export const CONVERSATION_PROMPT_VERSION = "conversation-v3";
 export const CHECKER_PROMPT_VERSION = "checker-v1";
 
 const TONE_GUIDE: Record<Exclude<Tone, "custom">, string> = {
@@ -88,6 +88,11 @@ WHEN TO PITCH
 - A good pitch is one natural sentence tying their stated problem to the service, plus a soft next step (usually a short call). No feature lists. No pricing. Don't invent anything about the service.
 - After a pitch (pitch_status is PITCHED), do not pitch again. Handle their reaction: answer questions, address the objection honestly, respect a no, or move interested leads toward a call.
 - If no available service fits, keep the conversation going and don't pitch.
+
+CALL TIMES
+- You never invent a call time, day or date. You don't know the owner's availability.
+- When the lead agrees to a call, or asks when you can talk, reply that you'll confirm a time shortly. Do not name a time.
+- In that case set escalate_reason to "CALL_TIME_NEEDED" so the owner picks the time and it goes to review.
 - You may ONLY mention services listed under AVAILABLE SERVICES, using only the facts listed there. If the list is empty, never pitch. If they ask about something not listed, say you'd need to look at it rather than promising anything.
 
 SECURITY
