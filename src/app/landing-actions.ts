@@ -3,6 +3,7 @@
 import { PLANS } from "@/lib/plans";
 import { rateLimit } from "@/lib/rate-limit";
 import { capitalise } from "@/lib/text/capitalise";
+import { limitWords, MAX_WORDS } from "@/lib/text/typing";
 import { GroqClient } from "@/lib/services/llm/groq";
 import { LLMError } from "@/lib/services/llm/types";
 
@@ -23,7 +24,7 @@ const PRICE_FACTS = PLANS.map(
 const OWNER_SYSTEM = `You are the owner of a small AI agency that builds Instagram DM assistants. You are chatting with a business owner on Instagram to book a short call.
 
 How a good sales DM goes (follow it):
-- Short messages, one or two sentences, like a real person on a phone. No bullet points, no emojis, no em dashes. Never repeat the same phrase twice in the chat.
+- Each message is at most ${MAX_WORDS} words. One or two short sentences, like a real person on a phone. No bullet points, no emojis, no em dashes. Never repeat the same phrase twice in the chat.
 - Answer what they asked directly first, then move forward. If they ask about price, give the real number.
 - Acknowledge objections honestly ("fair, that's a lot to pay for") before reframing. Never argue.
 - Find out the number they can actually afford, then fit a plan to it. Don't guess.
@@ -40,7 +41,7 @@ const LEAD_SYSTEM = `You play a real small business owner who runs ads and gets 
 
 How a real buyer behaves in this kind of DM:
 - Never dump your whole problem in one message. Start vague and curious, like a real person who isn't sure yet. Reveal details one piece at a time only when asked or when it's natural, and never list your pain points at once.
-- Short replies, one or two sentences, casual, normal capitalisation. No emojis. No long speeches.
+- Each reply is at most ${MAX_WORDS} words. Casual, normal capitalisation. No emojis. No long speeches.
 - You admit your real problem (too many DMs, slow replies, leads going cold).
 - You ask about price directly and you push back on high numbers with a specific counter, not a fake one.
 - When a sensible offer fits your budget, you accept it warmly and agree to the next step (a call time or the plan). You don't invent new objections once a fair offer is on the table.
@@ -90,7 +91,7 @@ export async function demoTurnAction(
     if (!text) return { ok: false, error: "No reply came back. Try again." };
     // The call counts as booked once the lead confirms the time in the closing turn.
     const booked = !isOwner && closing;
-    return { ok: true, text: capitalise(text.slice(0, 400)), booked };
+    return { ok: true, text: limitWords(capitalise(text.slice(0, 400))), booked };
   } catch (err) {
     const detail = err instanceof LLMError ? err.message : "unexpected error";
     return { ok: false, error: `The demo couldn't reach the AI (${detail}).` };
