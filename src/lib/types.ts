@@ -222,6 +222,12 @@ export interface AppSettings {
   groq_model: string;
   checker_model: string;
   checker_min_confidence: number;
+  /** groq (default, uses the Groq keys above) or a custom provider with its own key. */
+  ai_provider: "groq" | "openai" | "anthropic" | "gemini";
+  /** AES-256-GCM ciphertext for a custom provider key. Never sent to the browser. */
+  ai_key_encrypted: string | null;
+  ai_key_last4: string | null;
+  ai_model: string | null;
   /** AES-256-GCM ciphertext. Never sent to the browser. */
   groq_key_encrypted: string | null;
   groq_key_last4: string | null;
@@ -245,7 +251,8 @@ export interface AppSettings {
 }
 
 /** Safe-to-serialize view of AppSettings (no ciphertext). */
-export type PublicAppSettings = Omit<AppSettings, "groq_key_encrypted" | "apify_key_encrypted" | "meta_token_encrypted" | "meta_app_secret_encrypted"> & {
+export type PublicAppSettings = Omit<AppSettings, "groq_key_encrypted" | "apify_key_encrypted" | "meta_token_encrypted" | "meta_app_secret_encrypted" | "ai_key_encrypted"> & {
+  ai_key_saved: boolean;
   groq_key_saved: boolean;
   apify_key_saved: boolean;
   meta_token_saved: boolean;

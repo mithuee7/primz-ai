@@ -11,7 +11,7 @@ export interface LLMRequest {
 }
 
 export interface LLMClient {
-  readonly provider: "groq" | "demo";
+  readonly provider: string;
   /** Returns the raw model text (expected to be a JSON object string). */
   complete(req: LLMRequest): Promise<string>;
 }

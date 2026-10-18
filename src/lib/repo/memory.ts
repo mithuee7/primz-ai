@@ -46,6 +46,10 @@ export function defaultAppSettings(ownerId: string): AppSettings {
       "Keep it short. Ask one question at a time. Stay curious about their work before any offer. Pitch only when there's a real fit.",
     global_instructions:
       "",
+    ai_provider: "groq",
+    ai_key_encrypted: null,
+    ai_key_last4: null,
+    ai_model: null,
     groq_model: "llama-3.3-70b-versatile",
     checker_model: "llama-3.3-70b-versatile",
     checker_min_confidence: 0.85,

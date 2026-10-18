@@ -25,7 +25,7 @@ function Row({ row }: { row: AdminRow }) {
   const [plan, setPlan] = useState(row.planCode === "free" ? PLANS[0]!.code : row.planCode);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const eligible = !row.eligibleAt || new Date(row.eligibleAt).getTime() <= Date.now();
+  const overdue = row.eligibleAt ? new Date(row.eligibleAt).getTime() < Date.now() : false;
 
   const run = (action: "activate" | "deactivate") =>
     start(async () => {
@@ -46,7 +46,7 @@ function Row({ row }: { row: AdminRow }) {
       </td>
       <td className="py-4 pr-4 text-xs text-zinc-600">
         <p>Requested: {fmt(row.requestedAt)}</p>
-        <p>Eligible: {row.eligibleAt ? (eligible ? <span className="font-semibold text-emerald-700">now</span> : fmt(row.eligibleAt)) : "-"}</p>
+        <p>Activate by: {row.eligibleAt ? (overdue ? <span className="font-semibold text-red-600">overdue, {fmt(row.eligibleAt)}</span> : fmt(row.eligibleAt)) : "-"}</p>
         <p>Expires: {fmt(row.expiresAt)}</p>
       </td>
       <td className="py-4">
@@ -56,7 +56,7 @@ function Row({ row }: { row: AdminRow }) {
               <option key={p.code} value={p.code}>{p.name}</option>
             ))}
           </select>
-          <button type="button" disabled={pending || !eligible} onClick={() => run("activate")} className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-zinc-800 disabled:opacity-40">
+          <button type="button" disabled={pending} onClick={() => run("activate")} className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-zinc-800 disabled:opacity-40">
             {pending ? "…" : "Activate"}
           </button>
           <button type="button" disabled={pending} onClick={() => run("deactivate")} className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40">
@@ -77,7 +77,7 @@ export function AdminPlans({ rows }: { rows: AdminRow[] }) {
         <div className="mb-8 flex items-center justify-between">
           <div>
             <p className="text-2xl font-bold tracking-tight">Plans</p>
-            <p className="text-sm text-zinc-500">Requests become active only after the 48-hour wait.</p>
+            <p className="text-sm text-zinc-500">Buyers are told activation takes up to 48 hours. Activate each request before its deadline.</p>
           </div>
           <button
             type="button"

@@ -17,12 +17,13 @@ import {
 } from "@/app/actions";
 import { Badge, Button, Card } from "@/components/ui/primitives";
 import { CONTACT_EMAIL, SETUP_PRICE_INR } from "@/lib/contact";
+import { saveAiProviderAction } from "@/app/actions";
 import { TONES, TONE_LABELS, type PublicAppSettings, type Tone } from "@/lib/types";
 import { KeyManager } from "./key-manager";
 
 export interface SettingsViewProps {
   settings: PublicAppSettings;
-  llm: { provider: "groq" | "demo" | "none"; source: "settings" | "env" | "none"; keyCount?: number };
+  llm: { provider: string; source: string; keyCount?: number };
   apify: { keyCount?: number };
   instagram: { kind: "mock" | "meta"; connected: boolean; label: string; detail: string };
   callbackUrl: string;
@@ -37,6 +38,72 @@ function Section({ title, description, children }: { title: string; description?
       {description ? <p className="mt-0.5 text-sm text-zinc-500">{description}</p> : null}
       <div className="mt-4 space-y-4">{children}</div>
     </Card>
+  );
+}
+
+const PROVIDER_CHOICES: { id: "groq" | "openai" | "anthropic" | "gemini"; label: string; defaultModel: string; hint: string }[] = [
+  { id: "groq", label: "Groq", defaultModel: "qwen/qwen3-32b", hint: "Uses your Groq keys above." },
+  { id: "openai", label: "OpenAI", defaultModel: "gpt-4o-mini", hint: "Needs an OpenAI API key with billing enabled." },
+  { id: "anthropic", label: "Anthropic (Claude)", defaultModel: "claude-3-5-haiku-latest", hint: "Needs an Anthropic API key." },
+  { id: "gemini", label: "Google Gemini", defaultModel: "gemini-2.0-flash", hint: "Needs a Gemini API key from Google AI Studio." },
+];
+
+function AiProviderSection({ current }: { current: PublicAppSettings }) {
+  const router = useRouter();
+  const [provider, setProvider] = useState<"groq" | "openai" | "anthropic" | "gemini">(current.ai_provider);
+  const choice = PROVIDER_CHOICES.find((c) => c.id === provider)!;
+  const [model, setModel] = useState(current.ai_model ?? choice.defaultModel);
+  const [key, setKey] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [pending, start] = useTransition();
+
+  const pick = (id: "groq" | "openai" | "anthropic" | "gemini") => {
+    setProvider(id);
+    setModel(PROVIDER_CHOICES.find((c) => c.id === id)!.defaultModel);
+    setMsg(null);
+  };
+
+  return (
+    <Section title="AI provider" description="Groq is the default. You can also use your own OpenAI, Claude or Gemini key. Your key is stored encrypted and never shown again.">
+      <div className="flex flex-wrap gap-1.5">
+        {PROVIDER_CHOICES.map((c) => (
+          <button key={c.id} type="button" aria-pressed={provider === c.id} onClick={() => pick(c.id)} className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${provider === c.id ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 hover:bg-zinc-50"}`}>
+            {c.label}
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-zinc-500">{choice.hint}</p>
+      {provider !== "groq" ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="ai-key" className="label">{choice.label} API key</label>
+            <input id="ai-key" type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} placeholder={current.ai_key_saved && current.ai_provider === provider ? `Saved (ends ${current.ai_key_last4 ?? "····"}). Paste to replace` : "Paste your key"} className="field" />
+          </div>
+          <div>
+            <label htmlFor="ai-model" className="label">Model</label>
+            <input id="ai-model" value={model} onChange={(e) => setModel(e.target.value)} className="field" />
+          </div>
+        </div>
+      ) : null}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          disabled={pending || (provider !== "groq" && (key.trim().length < 10 || model.trim().length < 2))}
+          onClick={() =>
+            start(async () => {
+              const res = await saveAiProviderAction({ provider, key, model });
+              setMsg(res.ok ? { ok: true, text: provider === "groq" ? "Using Groq." : `Saved. Replies now use ${choice.label}.` } : { ok: false, text: res.error });
+              if (res.ok) {
+                setKey("");
+                router.refresh();
+              }
+            })
+          }
+        >
+          {provider === "groq" ? "Use Groq" : `Save ${choice.label}`}
+        </Button>
+        {msg ? <span className={`text-sm ${msg.ok ? "text-emerald-700" : "text-red-700"}`}>{msg.text}</span> : null}
+      </div>
+    </Section>
   );
 }
 
@@ -104,6 +171,8 @@ export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, day
         </div>
         <SetupOffer what="your Groq key" />
       </Section>
+
+      <AiProviderSection current={settings} />
 
       <Section title="Apify" description="Used for auto-detecting lead type from Instagram bio and recent posts.">
         <KeyManager

@@ -2,7 +2,6 @@
 
 import { cookies } from "next/headers";
 import { PLANS } from "@/lib/plans";
-import { ACTIVATION_WAIT_MS } from "@/lib/plan-state";
 import { createAdminClient } from "@/lib/supabase/clients";
 import { ADMIN_COOKIE, adminCookieValue, isAdmin, passwordMatches } from "./auth";
 
@@ -19,7 +18,7 @@ export async function adminLogoutAction(): Promise<void> {
   jar.delete({ name: ADMIN_COOKIE, path: "/admin" });
 }
 
-/** Confirms or changes a user's plan. Activation is only allowed after the 48-hour wait. */
+/** Confirms or changes a user's plan. Buyers are told activation takes up to 48 hours. */
 export async function adminSetPlanAction(
   ownerId: string,
   code: string,
@@ -34,11 +33,6 @@ export async function adminSetPlanAction(
     return error ? { ok: false, error: error.message } : { ok: true };
   }
 
-  const { data } = await db.from("user_plans").select("requested_at").eq("owner_id", ownerId).maybeSingle();
-  const requestedAt = (data as { requested_at: string | null } | null)?.requested_at;
-  if (requestedAt && Date.now() - new Date(requestedAt).getTime() < ACTIVATION_WAIT_MS) {
-    return { ok: false, error: "Wait 48 hours after the request before activating." };
-  }
   const now = new Date();
   const expires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   const { error } = await db

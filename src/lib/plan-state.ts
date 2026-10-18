@@ -12,6 +12,15 @@ export interface PlanState {
   name: string;
 }
 
+/** Platform keys the owner provides for the Basic plan. Set as secrets: BASIC_GROQ_KEYS, BASIC_APIFY_KEYS (comma separated). */
+export function basicGroqKeys(): string[] {
+  return (process.env.BASIC_GROQ_KEYS ?? "").split(",").map((k) => k.trim()).filter(Boolean);
+}
+
+export function basicApifyKeys(): string[] {
+  return (process.env.BASIC_APIFY_KEYS ?? "").split(",").map((k) => k.trim()).filter(Boolean);
+}
+
 /** The user's current plan. Anything not active (or past expiry) counts as no plan. */
 export async function getPlanState(ownerId: string): Promise<PlanState> {
   const db = createAdminClient();

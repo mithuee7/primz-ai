@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/clients";
-import { ACTIVATION_WAIT_MS } from "@/lib/plan-state";
+const ACTIVATE_WITHIN_MS = 48 * 60 * 60 * 1000;
 import { isAdmin } from "./auth";
 import { AdminLogin } from "./admin-login";
 import { AdminPlans, type AdminRow } from "./admin-plans";
@@ -33,7 +33,7 @@ export default async function AdminPage() {
     requestedAt: r.requested_at,
     activatedAt: r.activated_at,
     expiresAt: r.expires_at,
-    eligibleAt: r.requested_at ? new Date(new Date(r.requested_at).getTime() + ACTIVATION_WAIT_MS).toISOString() : null,
+    eligibleAt: r.requested_at ? new Date(new Date(r.requested_at).getTime() + ACTIVATE_WITHIN_MS).toISOString() : null,
   }));
 
   return <AdminPlans rows={rows} />;

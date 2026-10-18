@@ -3,7 +3,8 @@ import { getEnv } from "@/lib/env";
 import { getRepository } from "@/lib/repo";
 import type { CheckerIssue, GenerationOutput } from "@/lib/schemas";
 import { logActivity, type ActivityLevel } from "@/lib/services/activity-log";
-import { chatLimitReason, getPlanState } from "@/lib/plan-state";
+import { basicGroqKeys, chatLimitReason, getPlanState, type PlanState } from "@/lib/plan-state";
+import { conversationModel, checkerModel } from "@/lib/services/llm/resolve";
 import { getInstagramService, InstagramApiError, InstagramNotConfiguredError } from "@/lib/services/instagram";
 import { LLMError } from "@/lib/services/llm/types";
 import { resolveLLM } from "@/lib/services/llm/resolve";
@@ -141,6 +142,7 @@ async function runOnce(opts: PipelineOptions): Promise<{ outcome: PipelineOutcom
   const repo = getRepository();
   const attempt = opts.attempt ?? 0;
   let lockHeld = false;
+  let planState: PlanState | null = null;
 
   try {
     // 1-2. Find conversation, check auto_chat_enabled
@@ -150,6 +152,7 @@ async function runOnce(opts: PipelineOptions): Promise<{ outcome: PipelineOutcom
     // Plan and chat limits are enforced against Supabase. Tests and demo mode have no database.
     if (process.env.NODE_ENV !== "test" && process.env.DEMO_MODE !== "true") {
       const plan = await getPlanState(ownerId);
+      planState = plan;
       const all = await repo.listConversations(ownerId);
       const autoOn = all.filter((c) => c.settings.auto_chat_enabled).sort((a, b) => a.created_at.localeCompare(b.created_at));
       const rank = autoOn.findIndex((c) => c.id === conversationId);
@@ -186,7 +189,7 @@ async function runOnce(opts: PipelineOptions): Promise<{ outcome: PipelineOutcom
     const trace: RunTrace = { generationId: null, sendStarted: false, sentOk: false, delivery: "instagram", sendAmbiguous: false, aborted: false, rerun: false };
     let outcome: PipelineOutcome;
     try {
-      outcome = await processClaimed({ opts, conv, messages, lastMessage, trace });
+      outcome = await processClaimed({ opts, conv, messages, lastMessage, trace, planState });
     } catch (err) {
       outcome = await handleUnexpected(err, ownerId, conv, trace);
     }
@@ -296,8 +299,9 @@ async function processClaimed(args: {
   messages: Message[];
   lastMessage: Message;
   trace: RunTrace;
+  planState: PlanState | null;
 }): Promise<PipelineOutcome> {
-  const { opts, conv, messages, lastMessage, trace } = args;
+  const { opts, conv, messages, lastMessage, trace, planState } = args;
   const { ownerId, conversationId } = opts;
   const repo = getRepository();
 
@@ -306,7 +310,7 @@ async function processClaimed(args: {
 
   let llm;
   try {
-    llm = resolveLLM(appSettings);
+    llm = resolveLLM(appSettings, { platformGroqKeys: planState?.code === "basic" && planState.active ? basicGroqKeys() : [] });
   } catch (err) {
     return await flag(ownerId, conv, null, errText(err), ["CHECKER_FAILURE"]);
   }
@@ -319,7 +323,7 @@ async function processClaimed(args: {
       llm,
       { conversation: conv, messages, allowedServices: allowed, settings: appSettings },
       {
-        model: appSettings.groq_model,
+        model: conversationModel(appSettings),
         demo: {
           lastLeadMessage: lastMessage.content,
           leadReplyCount,
@@ -362,7 +366,7 @@ async function processClaimed(args: {
     const gen = await repo.createGeneration(ownerId, {
       conversation_id: conversationId,
       generated_text: raw,
-      model: appSettings.groq_model,
+      model: conversationModel(appSettings),
       prompt_version: CONVERSATION_PROMPT_VERSION,
       status: "PENDING_REVIEW",
       error: errMsg,
@@ -414,7 +418,7 @@ async function processClaimed(args: {
         allServices,
       },
       {
-        model: appSettings.checker_model,
+        model: checkerModel(appSettings),
         minConfidence: appSettings.checker_min_confidence ?? getEnv().CHECKER_MIN_CONFIDENCE,
         demo: {
           candidate: output.reply,

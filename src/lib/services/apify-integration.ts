@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/clients";
 import { decryptFromStorage } from "@/lib/secrets";
+import { basicApifyKeys, getPlanState } from "@/lib/plan-state";
 
 export type LeadType = "influencer" | "brand" | "reseller" | "agency" | "unknown";
 
@@ -90,7 +91,15 @@ export async function getAvailableApifyKey(userId: string): Promise<string | nul
     .limit(1)
     .single();
 
-  if (error || !data) return null;
+  if (error || !data) {
+    // No key of their own: an active Basic plan uses the platform pool.
+    const plan = await getPlanState(userId);
+    if (plan.code === "basic" && plan.active) {
+      const pool = basicApifyKeys();
+      if (pool.length) return pool[Math.floor(Math.random() * pool.length)]!;
+    }
+    return null;
+  }
 
   try {
     return decryptFromStorage(data.api_key_encrypted);

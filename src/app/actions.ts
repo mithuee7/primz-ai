@@ -195,6 +195,34 @@ export async function deleteServiceAction(id: string): Promise<ActionResult> {
 
 /* --------------------------------- settings --------------------------------- */
 
+const aiProviderInput = z.object({
+  provider: z.enum(["groq", "openai", "anthropic", "gemini"]),
+  key: z.string().max(500).optional(),
+  model: z.string().max(120).optional(),
+});
+
+/** Chooses the AI provider. Groq uses the Groq keys; the others store their own key, encrypted. */
+export async function saveAiProviderAction(input: unknown): Promise<ActionResult> {
+  return guarded("saveAiProvider", async (ownerId) => {
+    const parsed = aiProviderInput.parse(input);
+    const repo = getRepository();
+    if (parsed.provider === "groq") {
+      await repo.saveAppSettings(ownerId, { ai_provider: "groq", ai_key_encrypted: null, ai_key_last4: null, ai_model: null });
+      return;
+    }
+    const key = (parsed.key ?? "").trim();
+    const model = (parsed.model ?? "").trim();
+    if (key.length < 10) throw new Error("Paste a valid API key.");
+    if (model.length < 2) throw new Error("Enter the model name.");
+    await repo.saveAppSettings(ownerId, {
+      ai_provider: parsed.provider,
+      ai_key_encrypted: encryptForStorage(key),
+      ai_key_last4: key.slice(-4),
+      ai_model: model,
+    });
+  });
+}
+
 export async function saveSettingsAction(input: unknown): Promise<ActionResult> {
   return guarded("saveSettings", async (ownerId) => {
     const parsed = appSettingsInputSchema.parse(input);

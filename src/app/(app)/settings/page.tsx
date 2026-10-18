@@ -16,9 +16,10 @@ export default async function SettingsPage() {
   const raw = await getRepository().getAppSettings(user.id);
 
   // Strip the ciphertext before anything crosses the server/client boundary.
-  const { groq_key_encrypted, apify_key_encrypted, meta_token_encrypted, meta_app_secret_encrypted, ...rest } = raw;
+  const { groq_key_encrypted, apify_key_encrypted, meta_token_encrypted, meta_app_secret_encrypted, ai_key_encrypted, ...rest } = raw;
   const settings: PublicAppSettings = {
     ...rest,
+    ai_key_saved: Boolean(ai_key_encrypted),
     groq_key_saved: Boolean(groq_key_encrypted),
     apify_key_saved: Boolean(apify_key_encrypted),
     meta_token_saved: Boolean(meta_token_encrypted),
