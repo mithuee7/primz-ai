@@ -4,13 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { demoTurnAction, type DemoMessage } from "@/app/landing-actions";
 
 const LEAD_NAME = "Riya Sharma";
-const OWNER_HANDLE = "your_business";
 const MAX_MESSAGES = 15;
 
 /** Fixed opening: we message first, then the lead replies. Both are shown by default. */
 const OPENING: DemoMessage[] = [
-  { from: "us", text: "hey Riya! saw you're running a lot of ads lately. how are you handling the DMs that come in?" },
-  { from: "lead", text: "honestly it's a mess. I get so many messages and I'm too slow to reply, I lose most of them." },
+  { from: "us", text: "Hey Riya! Saw you're running a lot of ads lately. How are you handling the DMs that come in?" },
+  { from: "lead", text: "Honestly it's a mess. I get so many messages and I'm too slow to reply, I lose most of them." },
 ];
 
 export function DemoChat() {
@@ -72,7 +71,7 @@ export function DemoChat() {
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[15px] font-semibold text-zinc-900">{LEAD_NAME}</p>
-          <p className="truncate text-xs text-zinc-500">{OWNER_HANDLE} · Active now</p>
+          <p className="truncate text-xs text-zinc-500">Active now</p>
         </div>
       </div>
 
@@ -108,7 +107,7 @@ export function DemoChat() {
 
       {/* Input bar, decorative */}
       <div className="flex items-center justify-between gap-3 border-t border-zinc-100 px-4 py-3">
-        <span className="text-xs text-zinc-400">{messages.length}/{MAX_MESSAGES} messages</span>
+        <span />
         {finished ? (
           <button type="button" onClick={restart} className="rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-zinc-800 active:scale-[0.97]">
             Replay

@@ -4,7 +4,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { GroqClient } from "@/lib/services/llm/groq";
 import { LLMError } from "@/lib/services/llm/types";
 
-const DEMO_MODEL = "llama-3.3-70b-versatile";
+const DEMO_MODEL = process.env.DEMO_GROQ_MODEL || "llama-3.1-8b-instant";
 const MAX_MESSAGES = 15;
 
 export interface DemoMessage {
@@ -14,7 +14,12 @@ export interface DemoMessage {
 
 const OWNER_SYSTEM = `You reply to Instagram DMs for a small AI agency. Your goal: get the lead onto a short call. Keep replies to one or two short, casual sentences, like a real person typing on a phone. Ask at most one question. Never mention being an AI. When the lead agrees to a call or gives a time, confirm it and set "booked" to true. Otherwise "booked" is false. Return ONLY JSON: {"reply": "...", "booked": true|false}`;
 
-const LEAD_SYSTEM = `You play a small business owner who gets many Instagram DMs and is busy and a bit skeptical. You are slow to answer and you tell the truth about your problem: lots of DMs, not enough time, leads going cold. Reply in one or two short, casual lowercase sentences. You only agree to a call when the other person has made a clear, specific offer that fits your problem. Return ONLY JSON: {"reply": "..."}`;
+const LEAD_SYSTEM = `You play a small business owner who gets many Instagram DMs and is busy and a bit skeptical. You are slow to answer and you tell the truth about your problem: lots of DMs, not enough time, leads going cold. Reply in one or two short, casual sentences with normal capitalisation. You only agree to a call when the other person has made a clear, specific offer that fits your problem. Return ONLY JSON: {"reply": "..."}`;
+
+/** Capitalise the first letter of each sentence. */
+export function capitalise(text: string): string {
+  return text.replace(/(^|[.!?]\s+)([a-z])/g, (_, lead: string, ch: string) => lead + ch.toUpperCase());
+}
 
 function transcript(history: DemoMessage[]): string {
   return history.map((m) => `${m.from === "lead" ? "THEM" : "YOU"}: ${m.text}`).join("\n");
@@ -52,7 +57,7 @@ export async function demoTurnAction(
     const parsed = JSON.parse(raw) as { reply?: unknown; booked?: unknown };
     const text = typeof parsed.reply === "string" ? parsed.reply.trim() : "";
     if (!text) return { ok: false, error: "No reply came back. Try again." };
-    return { ok: true, text: text.slice(0, 400), booked: isOwner && parsed.booked === true };
+    return { ok: true, text: capitalise(text.slice(0, 400)), booked: isOwner && parsed.booked === true };
   } catch (err) {
     const detail = err instanceof LLMError ? err.message : "unexpected error";
     return { ok: false, error: `The demo couldn't reach the AI (${detail}).` };
