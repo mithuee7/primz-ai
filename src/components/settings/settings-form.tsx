@@ -31,6 +31,8 @@ export interface SettingsViewProps {
   daysLeft: number | null;
   demo: boolean;
   planActive: boolean;
+  /** Own AI and Apify keys: paid plans other than Basic (Basic uses the platform keys). */
+  ownKeys: boolean;
 }
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
@@ -225,7 +227,7 @@ function SetupOffer({ what }: { what: string }) {
   );
 }
 
-export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, daysLeft, demo, planActive }: SettingsViewProps) {
+export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, daysLeft, demo, planActive, ownKeys }: SettingsViewProps) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -244,12 +246,15 @@ export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, day
 
   return (
     <div className="mx-auto grid max-w-3xl gap-4">
-      <AiProviderSection
-        current={settings}
-        groqKeyCount={llm.keyCount || 0}
-        groqLastFour={settings.groq_key_last4}
-      />
+      {ownKeys ? (
+        <AiProviderSection
+          current={settings}
+          groqKeyCount={llm.keyCount || 0}
+          groqLastFour={settings.groq_key_last4}
+        />
+      ) : null}
 
+      {ownKeys ? (
       <Section title="Apify" description="Used for auto-detecting lead type from Instagram bio and recent posts.">
         <KeyManager
           keyType="apify"
@@ -263,6 +268,7 @@ export function SettingsForm({ settings, llm, apify, instagram, callbackUrl, day
           description="Fetch Instagram profile info (bio, posts) for automatic lead type detection. Supports multiple keys."
         />
       </Section>
+      ) : null}
 
       {!planActive && instagram.kind === "meta" ? (
         <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
