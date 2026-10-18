@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { requestPlanAction } from "@/app/plan-actions";
 import { CONTACT_INSTAGRAM, CONTACT_INSTAGRAM_URL } from "@/lib/contact";
 
@@ -30,8 +31,8 @@ export function PlanBuyButton({
   useEffect(() => {
     if (!step) return;
     if (step.left <= 0) {
-      window.open(CONTACT_INSTAGRAM_URL, "_blank", "noopener,noreferrer");
-      setStep(null);
+      // Same-tab navigation: browsers block window.open after a timer.
+      window.location.href = CONTACT_INSTAGRAM_URL;
       return;
     }
     const t = setTimeout(() => setStep((s) => (s ? { ...s, left: s.left - 1 } : s)), 1000);
@@ -84,7 +85,8 @@ export function PlanBuyButton({
       <span className="sr-only">Instagram {CONTACT_INSTAGRAM}</span>
 
       {step ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/60 p-4 backdrop-blur-md animate-fade-in sm:p-6">
+        typeof document !== "undefined" ? createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/60 p-4 backdrop-blur-md animate-fade-in sm:p-6">
           <div className="relative w-full max-w-xl animate-fade-up overflow-hidden rounded-[32px] bg-white shadow-2xl">
             <div className="bg-gradient-to-br from-blue-600 via-indigo-600 to-fuchsia-600 px-8 pb-10 pt-8 text-white">
               <div className="flex items-center gap-3">
@@ -116,20 +118,21 @@ export function PlanBuyButton({
                 <button type="button" onClick={() => setStep(null)} className="rounded-2xl border border-zinc-300 px-5 py-3.5 text-sm font-semibold text-zinc-700 transition-all hover:bg-zinc-50 active:scale-[0.98]">
                   Cancel
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.open(CONTACT_INSTAGRAM_URL, "_blank", "noopener,noreferrer");
-                    setStep(null);
-                  }}
-                  className="rounded-2xl bg-zinc-900 px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-zinc-900/25 transition-all hover:bg-zinc-800 active:scale-[0.98]"
+                <a
+                  href={CONTACT_INSTAGRAM_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setStep(null)}
+                  className="rounded-2xl bg-zinc-900 px-5 py-3.5 text-center text-sm font-semibold text-white shadow-lg shadow-zinc-900/25 transition-all hover:bg-zinc-800 active:scale-[0.98]"
                 >
                   Open Instagram now
-                </button>
+                </a>
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+          document.body,
+        ) : null
       ) : null}
     </div>
   );

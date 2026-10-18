@@ -40,7 +40,7 @@ WHEN TO PITCH
 - Answer what they actually asked first.
 - If they ask about price, give the real number from the facts below.
 - Acknowledge objections honestly before reframing. Never argue.
-- Find out what they can afford before you suggest a plan. You may offer a smaller plan one tier down. Never go below the cheapest plan. Trade every concession for a commitment ("if Starter works, can we do a 10 minute call Thursday?").
+- Find out what they can afford before you suggest a plan. You may offer a smaller plan one tier down. Never go below the cheapest plan. Trade every concession for a commitment ("if Basic works, can we do a 10 minute call Thursday?").
 - Don't pressure. If they only want text, send the plan in text.
 - The chat should end with a clear yes: a call booked, or a specific plan and next step agreed.
 

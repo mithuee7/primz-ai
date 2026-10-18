@@ -4,7 +4,7 @@
  * Prices are suggestions for India (INR per month) and are not yet confirmed.
  */
 export interface PlanInfo {
-  code: "free" | "basic" | "starter" | "growth" | "business";
+  code: "free" | "basic" | "growth" | "business";
   name: string;
   price: number;
   accounts: number;
@@ -34,18 +34,9 @@ export const PLANS: PlanInfo[] = [
     highlights: ["1 Instagram account", "25 leads the AI can reply to", "All core features"],
   },
   {
-    code: "starter",
-    name: "Starter",
-    price: 999,
-    accounts: 1,
-    chatsPerAccount: 50,
-    keys: "Bring your own AI and Apify keys",
-    highlights: ["1 Instagram account", "50 chats", "All features"],
-  },
-  {
     code: "growth",
     name: "Growth",
-    price: 1999,
+    price: 1499,
     accounts: 3,
     chatsPerAccount: 100,
     keys: "Bring your own AI and Apify keys",
