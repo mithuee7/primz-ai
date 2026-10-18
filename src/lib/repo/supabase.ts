@@ -1,6 +1,5 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { DEFAULT_SERVICES } from "@/lib/default-services";
 import type { ServiceInput } from "@/lib/schemas";
 import { createAdminClient } from "@/lib/supabase/clients";
 import type {
@@ -100,17 +99,7 @@ export class SupabaseRepository implements Repository {
       .select("owner_id");
     const inserted = must(res, "init settings");
     if (inserted.length === 0) return;
-
-    const { count } = await this.db.from("services").select("id", { count: "exact", head: true }).eq("owner_id", ownerId);
-    if (!count) {
-      must(
-        await this.db
-          .from("services")
-          .insert(DEFAULT_SERVICES.map((s, i) => ({ ...s, owner_id: ownerId, sort_order: i, is_active: true })))
-          .select(),
-        "seed services",
-      );
-    }
+    // New owners start with no services. They add their own on the Services page.
   }
 
   async listConversations(ownerId: string) {

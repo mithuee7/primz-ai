@@ -45,7 +45,7 @@ export function defaultAppSettings(ownerId: string): AppSettings {
     default_ai_behavior:
       "Keep it short. Ask one question at a time. Stay curious about their work before any offer. Pitch only when there's a real fit.",
     global_instructions:
-      "We're Primz. We build AI sales assistants, receptionists and lead-response systems. Never quote prices in DMs, move pricing questions to a short call.",
+      "",
     groq_model: "llama-3.3-70b-versatile",
     checker_model: "llama-3.3-70b-versatile",
     checker_min_confidence: 0.85,
