@@ -3,6 +3,9 @@
  * (supabase/migrations/0008_plans.sql). Change prices here and in the SQL together.
  * Prices are suggestions for India (INR per month) and are not yet confirmed.
  */
+/** Order of plans from lowest to highest. Upgrades must go up this list. */
+export const PLAN_RANK: Record<PlanInfo["code"], number> = { free: 0, basic: 1, growth: 2, business: 3 };
+
 /** The free plan runs for this many days, once per account. Every plan covers one Instagram account. */
 export const FREE_TRIAL_DAYS = 7;
 

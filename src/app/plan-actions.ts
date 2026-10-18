@@ -1,7 +1,7 @@
 "use server";
 
 import { requireUserForAction } from "@/lib/auth";
-import { FREE_TRIAL_DAYS, PLANS } from "@/lib/plans";
+import { FREE_TRIAL_DAYS, PLANS, PLAN_RANK } from "@/lib/plans";
 import { createAdminClient } from "@/lib/supabase/clients";
 
 /**
@@ -34,8 +34,13 @@ export async function requestPlanAction(code: string): Promise<{ ok: true } | { 
     return error ? { ok: false, error: "Couldn't start the free plan. Try again." } : { ok: true };
   }
 
-  // During a free trial the trial keeps running. The paid plan starts when you approve it.
-  if (row?.status === "active" && row.plan_code === "free") {
+  // A paid plan waits for approval. The current plan (free trial or paid) keeps running until then.
+  // Only upgrades are accepted: never a lower plan or the same plan again.
+  if (row?.status === "active") {
+    const currentRank = PLAN_RANK[row.plan_code as keyof typeof PLAN_RANK] ?? 0;
+    const targetRank = PLAN_RANK[code as keyof typeof PLAN_RANK];
+    if (targetRank === currentRank) return { ok: false, error: `You already have the ${PLANS.find((p) => p.code === code)?.name} plan.` };
+    if (targetRank < currentRank) return { ok: false, error: "You can't switch to a lower plan here. Contact us to change plans." };
     const { error } = await db
       .from("user_plans")
       .update({ requested_plan_code: code, requested_at: now, updated_at: now })

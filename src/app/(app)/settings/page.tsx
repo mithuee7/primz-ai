@@ -1,6 +1,7 @@
 import { SettingsForm } from "@/components/settings/settings-form";
 import { PageHeader } from "@/components/ui/primitives";
 import { PlanCard } from "@/components/plan/plan-card";
+import { UpgradeOptions } from "@/components/plan/upgrade-options";
 import { requireUser } from "@/lib/auth";
 import { getPlanState } from "@/lib/plan-state";
 import { headers } from "next/headers";
@@ -68,6 +69,7 @@ export default async function SettingsPage() {
       {plan ? (
         <div className="mx-auto mb-4 max-w-3xl">
           <PlanCard plan={plan} activeChats={activeChats} />
+          {plan.active ? <div className="mt-4"><UpgradeOptions currentCode={plan.code} /></div> : null}
         </div>
       ) : null}
       <SettingsForm
